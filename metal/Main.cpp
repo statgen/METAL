@@ -83,6 +83,9 @@ StringArray filterAlternate;
 StringHash  filterSets;
 IntArray    filterCounts;
 
+bool studyOverlap = false;
+double zCutoff = 1.0;
+
 void UserBreak(int)
    {
    printf("\n\n## METAL STOPPED BY USER\n\n");
@@ -1486,562 +1489,515 @@ bool ReProcessFile(FileSummary * history)
 
 
 void ShowHelp(bool startup)
-   {
-   const char * setting = startup ? "default" : "setting";
+{
+    const char * setting = startup ? "default" : "setting";
 
-   String gc;
+    String gc;
 
-   if (genomicControl && genomicControlLambda != 0.0)
-      gc.printf("%.3f", genomicControlLambda);
-   else if (genomicControl && genomicControlFilter.Length())
-      gc.printf("LIST WITH %d MARKERS", genomicControlCount);
-   else
-      gc = genomicControl ? "ON" : "OFF";
+    if (genomicControl && genomicControlLambda != 0.0)
+        gc.printf("%.3f", genomicControlLambda);
+    else if (genomicControl && genomicControlFilter.Length())
+        gc.printf("LIST WITH %d MARKERS", genomicControlCount);
+    else
+        gc = genomicControl ? "ON" : "OFF";
 
-   printf("# This program faciliates meta-analysis of genome-wide association studies.\n"
-          "# Commonly used commands are listed below:\n"
-          "#\n"
-          "# Options for describing input files ...\n"
-          "#   SEPARATOR        [WHITESPACE|COMMA|BOTH|TAB] (default = WHITESPACE)\n"
-          "#   COLUMNCOUNTING   [STRICT|LENIENT]            (%s = '%s')\n"
-          "#   MARKERLABEL      [LABEL]                     (%s = '%s')\n"
-          "#   ALLELELABELS     [LABEL1 LABEL2]             (%s = '%s','%s')\n"
-          "#   EFFECTLABEL      [LABEL|log(LABEL)]          (%s = '%s')\n"
-          "#   FLIP\n"
-          "#\n"
-          "# Options for filtering input files ...\n"
-          "#   ADDFILTER        [LABEL CONDITION VALUE]     (example = ADDFILTER N > 10)\n"
-          "#                    (available conditions are <, >, <=, >=, =, !=, IN)\n"
-          "#   REMOVEFILTERS\n"
-          "#\n"
-          "# Options for sample size weighted meta-analysis ...\n"
-          "#   WEIGHTLABEL      [LABEL]                     (%s = '%s')\n"
-          "#   PVALUELABEL      [LABEL]                     (%s = '%s')\n"
-          "#   DEFAULTWEIGHT    [NUMBER]                    (%s = %.1f)\n"
-          "#   MINWEIGHT        [NUMBER]                    (%s = %.1f)\n"
-          "#\n"
-          "# Options for inverse variance weighted meta-analysis ...\n"
-          "#   STDERRLABEL      [LABEL]                     (%s = '%s')\n"
-          "#   SCHEME           [SAMPLESIZE|STDERR]         (%s = %s)\n"
-          "#\n"
-          "# Options to enable tracking of allele frequencies ...\n"
-          "#   AVERAGEFREQ      [ON|OFF]                    (%s = %s)\n"
-          "#   MINMAXFREQ       [ON|OFF]                    (%s = %s)\n"
-          "#   FREQLABEL        [LABEL]                     (%s = '%s')\n"
-          "#\n"
-          "# Options to enable tracking of user defined variables ...\n"
-          "#   CUSTOMVARIABLE   [VARNAME]\n"
-          "#   LABEL            [VARNAME] AS [HEADER]\n"
-          "#\n"
-          "# Options to enable explicit strand information ...\n"
-          "#   USESTRAND        [ON|OFF]                    (%s = %s)\n"
-          "#   STRANDLABEL      [LABEL]                     (%s = '%s')\n"
-          "#\n"
-          "# Automatic genomic control correction of input statistics ...\n"
-          "#   GENOMICCONTROL   [ON|OFF|VALUE|LIST snps.txt](%s = %s)\n"
-          "#\n"
-          "# Options for general analysis control ...\n"
-          "#   PROCESSFILE      [FILENAME]\n"
-          "#   OUTFILE          [PREFIX SUFFIX]             (default = 'METAANALYSIS','.TBL')\n"
-          "#   MAXWARNINGS      [NUMBER]                    (%s = %d)\n"
-          "#   VERBOSE          [ON|OFF]                    (%s = '%s')\n"
-          "#   LOGPVALUE        [ON|OFF]                    (%s = '%s')\n"
-          "#   ANALYZE          [HETEROGENEITY]\n"
-          "#   CLEAR\n\n"
-          "# Options for general run control ...\n"
-          "#   SOURCE           [SCRIPTFILE]\n"
-          "#   RETURN\n"
-          "#   QUIT\n\n",
-          setting, (const char *) strictColumnCounting ? "STRICT" : "LENIENT",
-          setting, (const char *) markerLabel,
-          setting, (const char *) firstAllele, (const char *) secondAllele,
-          setting, (const char *) effectLabel,
-          setting, (const char *) weightLabel,
-          setting, (const char *) pvalueLabel,
-          setting, weight,
-          setting, minweight,
-          setting, (const char *) stderrLabel,
-          setting, useStandardErrors ? "STDERR" : "SAMPLESIZE",
-          setting, averageFrequencies ? "ON" : "OFF",
-          setting, minMaxFrequencies ? "ON" : "OFF",
-          setting, (const char *) frequencyLabel,
-          setting, useStrand ? "ON" : "OFF",
-          setting, (const char *) strandLabel,
-          setting, (const char *) gc,
-          setting, maxWarnings,
-          setting, verbose ? "ON" : "OFF",
-          setting, logPValue ? "ON" : "OFF");
-   }
+    printf("# This program faciliates meta-analysis of genome-wide association studies.\n"
+                   "# Commonly used commands are listed below:\n"
+                   "#\n"
+                   "# Options for describing input files ...\n"
+                   "#   SEPARATOR        [WHITESPACE|COMMA|BOTH|TAB] (default = WHITESPACE)\n"
+                   "#   COLUMNCOUNTING   [STRICT|LENIENT]            (%s = '%s')\n"
+                   "#   MARKERLABEL      [LABEL]                     (%s = '%s')\n"
+                   "#   ALLELELABELS     [LABEL1 LABEL2]             (%s = '%s','%s')\n"
+                   "#   EFFECTLABEL      [LABEL|log(LABEL)]          (%s = '%s')\n"
+                   "#   FLIP\n"
+                   "#\n"
+                   "# Options for filtering input files ...\n"
+                   "#   ADDFILTER        [LABEL CONDITION VALUE]     (example = ADDFILTER N > 10)\n"
+                   "#                    (available conditions are <, >, <=, >=, =, !=, IN)\n"
+                   "#   REMOVEFILTERS\n"
+                   "#\n"
+                   "# Options for sample size weighted meta-analysis ...\n"
+                   "#   WEIGHTLABEL      [LABEL]                     (%s = '%s')\n"
+                   "#   PVALUELABEL      [LABEL]                     (%s = '%s')\n"
+                   "#   DEFAULTWEIGHT    [NUMBER]                    (%s = %.1f)\n"
+                   "#   MINWEIGHT        [NUMBER]                    (%s = %.1f)\n"
+                   "#\n"
+                   "# Options for inverse variance weighted meta-analysis ...\n"
+                   "#   STDERRLABEL      [LABEL]                     (%s = '%s')\n"
+                   "#   SCHEME           [SAMPLESIZE|STDERR]         (%s = %s)\n"
+                   "#\n"
+                   "# Options to enable tracking of allele frequencies ...\n"
+                   "#   AVERAGEFREQ      [ON|OFF]                    (%s = %s)\n"
+                   "#   MINMAXFREQ       [ON|OFF]                    (%s = %s)\n"
+                   "#   FREQLABEL        [LABEL]                     (%s = '%s')\n"
+                   "#\n"
+                   "# Options to enable tracking of user defined variables ...\n"
+                   "#   CUSTOMVARIABLE   [VARNAME]\n"
+                   "#   LABEL            [VARNAME] AS [HEADER]\n"
+                   "#\n"
+                   "# Options to enable explicit strand information ...\n"
+                   "#   USESTRAND        [ON|OFF]                    (%s = %s)\n"
+                   "#   STRANDLABEL      [LABEL]                     (%s = '%s')\n"
+                   "#\n"
+                   "# Automatic genomic control correction of input statistics ...\n"
+                   "#   GENOMICCONTROL   [ON|OFF|VALUE|LIST snps.txt](%s = %s)\n"
+                   "#\n"
+                   "# Options to account for samples overlap ...\n"
+                   "#   OVERLAP          [ON|OFF]                    (%s = %s)\n"
+                   "#   ZCUTOFF          [NUMBER]                    (%s = %.1f)\n"
+                   "#\n"
+                   "# Options for general analysis control ...\n"
+                   "#   PROCESSFILE      [FILENAME]\n"
+                   "#   OUTFILE          [PREFIX SUFFIX]             (default = 'METAANALYSIS','.TBL')\n"
+                   "#   MAXWARNINGS      [NUMBER]                    (%s = %d)\n"
+                   "#   VERBOSE          [ON|OFF]                    (%s = '%s')\n"
+                   "#   LOGPVALUE        [ON|OFF]                    (%s = '%s')\n"
+                   "#   ANALYZE          [HETEROGENEITY]\n"
+                   "#   CLEAR\n\n"
+                   "# Options for general run control ...\n"
+                   "#   SOURCE           [SCRIPTFILE]\n"
+                   "#   RETURN\n"
+                   "#   QUIT\n\n",
+           setting, (const char *) strictColumnCounting ? "STRICT" : "LENIENT",
+           setting, (const char *) markerLabel,
+           setting, (const char *) firstAllele, (const char *) secondAllele,
+           setting, (const char *) effectLabel,
+           setting, (const char *) weightLabel,
+           setting, (const char *) pvalueLabel,
+           setting, weight,
+           setting, minweight,
+           setting, (const char *) stderrLabel,
+           setting, useStandardErrors ? "STDERR" : "SAMPLESIZE",
+           setting, averageFrequencies ? "ON" : "OFF",
+           setting, minMaxFrequencies ? "ON" : "OFF",
+           setting, (const char *) frequencyLabel,
+           setting, useStrand ? "ON" : "OFF",
+           setting, (const char *) strandLabel,
+           setting, (const char *) gc,
+           setting, "OFF",
+           setting, zCutoff,
+           setting, maxWarnings,
+           setting, verbose ? "ON" : "OFF",
+           setting, logPValue ? "ON" : "OFF");
+}
 
 void RunScript(FILE * file)
-   {
-   String input;
-   StringArray tokens;
+{
+    String input;
+    StringArray tokens;
 
-   while (!feof(file))
-      {
-      if (file == stdin)
-         input.ReadLine().Trim();
-      else
-         input.ReadLine(file).Trim();
+    while (!feof(file)) {
+        if (file == stdin)
+            input.ReadLine().Trim();
+        else
+            input.ReadLine(file).Trim();
 
-      tokens.ReplaceTokens(input);
+        tokens.ReplaceTokens(input);
 
-      if (tokens.Length() == 0)
-         continue;
-
-      if (input[0] == '#') continue;
-
-      if ((tokens[0].MatchesBeginningOf("ANALYZE") == 0 ||
-          tokens[0].MatchesBeginningOf("ANALYSE") == 0) &&
-          tokens[0].Length() > 1)
-         {
-         Analyze(tokens.Length() > 1 && tokens[1].MatchesBeginningOf("HETEROGENEITY") == 0);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("CLEAR") == 0 && tokens[0].Length() > 1)
-         {
-         ClearAll();
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("REMOVEFILTERS") == 0 && tokens[0].Length() > 2)
-         {
-         ClearFilters();
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("FLIP") == 0 && tokens[0].Length() > 1)
-         {
-         flip = !flip;
-         printf("## All effects will %s flipped\n", flip ? "be" : "not be");
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("HELP") == 0)
-         {
-         ShowHelp();
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("QUIT") == 0 ||
-          tokens[0].MatchesBeginningOf("EXIT") == 0 && tokens[0].Length() > 1)
-         {
-         ClearAll();
-         exit(0);
-         }
-
-      if (tokens[0].MatchesBeginningOf("RETURN") == 0 && tokens[0].Length() > 2)
-         break;
-
-      if (tokens.Length() == 1)
-         {
-         printf("##  ERROR: The command you issued could not be processed ...\n");
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("COLUMNCOUNTING") == 0 && tokens[0].Length() > 1)
-         {
-         if (tokens[1].MatchesBeginningOf("STRICT") == 0)
-            {
-            strictColumnCounting = true;
-            printf("## STRICT MODE: Every input line must have exactly the same number of columns\n");
+        if (tokens.Length() == 0)
             continue;
-            }
-         if (tokens[1].MatchesBeginningOf("LENIENT") == 0)
-            {
-            strictColumnCounting = false;
-            printf("## LENIENT MODE: Input lines can include extra columns, which will be ignored\n");
+
+        if (input[0] == '#') continue;
+
+        if ((tokens[0].MatchesBeginningOf("ANALYZE") == 0 ||
+             tokens[0].MatchesBeginningOf("ANALYSE") == 0) &&
+            tokens[0].Length() > 1) {
+            Analyze(tokens.Length() > 1 && tokens[1].MatchesBeginningOf("HETEROGENEITY") == 0);
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("CUSTOMVARIABLE") == 0 && tokens[0].Length() > 1)
-         {
-         if (markerLookup.Entries())
-            {
-            printf("## ERROR: Meta-analysis in progress - before creating custom variables, use CLEAR command\n");
+        if (tokens[0].MatchesBeginningOf("CLEAR") == 0 && tokens[0].Length() > 1) {
+            ClearAll();
             continue;
-            }
+        }
 
-         if (customVariables.SlowFind(tokens[1]) >= 0)
-            printf("## Variable '%s' already defined\n", (const char *) tokens[1]);
-         else
-            {
-            printf("## Created custom variable '%s'\n", (const char *) tokens[1]);
-            customVariables.Push(tokens[1]);
-            customLabels.Push(tokens[1]);
-            }
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("DEFAULTWEIGHT") == 0)
-         {
-         weight = tokens[1].AsDouble();
-         printf("## Set default weight to %.2f ...\n", weight);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("WEIGHTLABEL") == 0)
-         {
-         weightLabel = tokens[1];
-         printf("## Set weight header to %s ...\n", (const char *) weightLabel);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("GENOMICCONTROL") == 0)
-         {
-         if (tokens[1] == "ON")
-            {
-            genomicControl = true;
-            genomicControlFilter.Clear();
-            genomicControlLambda = 0.0;
-            printf("## Genomic control correction of input statistics enabled\n");
+        if (tokens[0].MatchesBeginningOf("REMOVEFILTERS") == 0 && tokens[0].Length() > 2) {
+            ClearFilters();
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1)
-            {
-            genomicControl = false;
-            genomicControlFilter.Clear();
-            printf("## Genomic control correction of input statistics disabled\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("FLIP") == 0 && tokens[0].Length() > 1) {
+            flip = !flip;
+            printf("## All effects will %s flipped\n", flip ? "be" : "not be");
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("LIST") == 0 && tokens.Length() == 3)
-            {
-            genomicControl = true;
-            genomicControlCount = 0;
+        }
 
-            String      label;
-            StringArray markerList;
-            markerList.Read(tokens[2]);
-
-            for (int i = 0; i < markerList.Length(); i++)
-               {
-               label = markerList[i].Trim();
-
-               if (label.Length() == 0) continue;
-
-               GetMarkerId(label);
-               genomicControlCount++;
-               }
-
-            if (genomicControlCount == 0)
-               {
-               genomicControl = false;
-               genomicControlFilter.Clear();
-
-               printf("## Genomic control disabled, no markers listed in [%s]\n", (const char *) tokens[2]);
-               continue;
-               }
-
-            genomicControlFilter.Fill('.', markerLookup.Entries());
-
-            for (int i = 0; i < markerList.Length(); i++)
-               {
-               label = markerList[i].Trim();
-
-               if (label.Length() == 0) continue;
-
-               genomicControlFilter[GetMarkerId(label)] = 'Y';
-               }
-
-            printf("## Genomic control correction will be based on %d markers listed in [%s]\n",
-                   genomicControlCount, (const char *) tokens[2]);
+        if (tokens[0].MatchesBeginningOf("HELP") == 0) {
+            ShowHelp();
             continue;
-            }
-         else if (tokens[1].AsDouble() > 0.0)
-            {
-            genomicControl = true;
-            genomicControlLambda = tokens[1].AsDouble();
-            genomicControlFilter.Clear();
-            printf("## Genomic control parameter set to %.3f\n", genomicControlLambda);
+        }
+
+        if (tokens[0].MatchesBeginningOf("QUIT") == 0 ||
+            tokens[0].MatchesBeginningOf("EXIT") == 0 && tokens[0].Length() > 1) {
+            ClearAll();
+            exit(0);
+        }
+
+        if (tokens[0].MatchesBeginningOf("RETURN") == 0 && tokens[0].Length() > 2)
+            break;
+
+        if (tokens.Length() == 1) {
+            printf("##  ERROR: The command you issued could not be processed ...\n");
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("LOGPVALUE") == 0)
-         {
-         if (tokens[1] == "ON")
-            {
-            logPValue = true;
-            printf("## Log(p-value) will be output\n");
+        if (tokens[0].MatchesBeginningOf("COLUMNCOUNTING") == 0 && tokens[0].Length() > 1) {
+            if (tokens[1].MatchesBeginningOf("STRICT") == 0) {
+                strictColumnCounting = true;
+                printf("## STRICT MODE: Every input line must have exactly the same number of columns\n");
+                continue;
+            }
+            if (tokens[1].MatchesBeginningOf("LENIENT") == 0) {
+                strictColumnCounting = false;
+                printf("## LENIENT MODE: Input lines can include extra columns, which will be ignored\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("CUSTOMVARIABLE") == 0 && tokens[0].Length() > 1) {
+            if (markerLookup.Entries()) {
+                printf("## ERROR: Meta-analysis in progress - before creating custom variables, use CLEAR command\n");
+                continue;
+            }
+
+            if (customVariables.SlowFind(tokens[1]) >= 0)
+                printf("## Variable '%s' already defined\n", (const char *) tokens[1]);
+            else {
+                printf("## Created custom variable '%s'\n", (const char *) tokens[1]);
+                customVariables.Push(tokens[1]);
+                customLabels.Push(tokens[1]);
+            }
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1)
-            {
-            logPValue = false;
-            printf("## Untransformed p-value will be output\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("DEFAULTWEIGHT") == 0) {
+            weight = tokens[1].AsDouble();
+            printf("## Set default weight to %.2f ...\n", weight);
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("USESTRAND") == 0 && tokens[0].Length() > 3)
-         {
-         if (tokens[1] == "ON")
-            {
-            useStrand = true;
-            printf("## Strand flipping according to strand column enabled\n");
+        if (tokens[0].MatchesBeginningOf("WEIGHTLABEL") == 0) {
+            weightLabel = tokens[1];
+            printf("## Set weight header to %s ...\n", (const char *) weightLabel);
             continue;
+        }
+
+        if (tokens[0].MatchesBeginningOf("GENOMICCONTROL") == 0) {
+            if (tokens[1] == "ON") {
+                genomicControl = true;
+                genomicControlFilter.Clear();
+                genomicControlLambda = 0.0;
+                printf("## Genomic control correction of input statistics enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                genomicControl = false;
+                genomicControlFilter.Clear();
+                printf("## Genomic control correction of input statistics disabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("LIST") == 0 && tokens.Length() == 3) {
+                genomicControl = true;
+                genomicControlCount = 0;
+
+                String label;
+                StringArray markerList;
+                markerList.Read(tokens[2]);
+
+                for (int i = 0; i < markerList.Length(); i++) {
+                    label = markerList[i].Trim();
+
+                    if (label.Length() == 0) continue;
+
+                    GetMarkerId(label);
+                    genomicControlCount++;
+                }
+
+                if (genomicControlCount == 0) {
+                    genomicControl = false;
+                    genomicControlFilter.Clear();
+
+                    printf("## Genomic control disabled, no markers listed in [%s]\n", (const char *) tokens[2]);
+                    continue;
+                }
+
+                genomicControlFilter.Fill('.', markerLookup.Entries());
+
+                for (int i = 0; i < markerList.Length(); i++) {
+                    label = markerList[i].Trim();
+
+                    if (label.Length() == 0) continue;
+
+                    genomicControlFilter[GetMarkerId(label)] = 'Y';
+                }
+
+                printf("## Genomic control correction will be based on %d markers listed in [%s]\n",
+                       genomicControlCount, (const char *) tokens[2]);
+                continue;
+            } else if (tokens[1].AsDouble() > 0.0) {
+                genomicControl = true;
+                genomicControlLambda = tokens[1].AsDouble();
+                genomicControlFilter.Clear();
+                printf("## Genomic control parameter set to %.3f\n", genomicControlLambda);
+                continue;
             }
-         else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1)
-            {
-            useStrand = false;
-            printf("## Strand flipping according to strand column disabled\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("LOGPVALUE") == 0) {
+            if (tokens[1] == "ON") {
+                logPValue = true;
+                printf("## Log(p-value) will be output\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                logPValue = false;
+                printf("## Untransformed p-value will be output\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("USESTRAND") == 0 && tokens[0].Length() > 3) {
+            if (tokens[1] == "ON") {
+                useStrand = true;
+                printf("## Strand flipping according to strand column enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                useStrand = false;
+                printf("## Strand flipping according to strand column disabled\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("VERBOSE") == 0) {
+            if (tokens[1] == "ON") {
+                verbose = true;
+                printf("## Verbose output during meta-analysis enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                verbose = false;
+                printf("## Verbose output during meta-analysis disabled\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("AVERAGEFREQUENCY") == 0 && tokens[0].Length() > 1) {
+            if (markerLookup.Entries()) {
+                printf("## ERROR: Meta-analysis in progress - before issuing this command, use CLEAR command\n");
+                continue;
+            }
+
+            if (tokens[1] == "ON") {
+                averageFrequencies = true;
+                printf("## Averaging of allele frequencies enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                averageFrequencies = false;
+                printf("## Averaging of allele frequencies disabled\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("MINMAXFREQUENCY") == 0 && tokens[0].Length() > 3) {
+            if (markerLookup.Entries()) {
+                printf("## ERROR: Meta-analysis in progress - before issuing this command, use CLEAR command\n");
+                continue;
+            }
+
+            if (tokens[1] == "ON") {
+                minMaxFrequencies = true;
+                printf("## Tracking of extreme allele frequencies enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                minMaxFrequencies = false;
+                printf("## Tracking of extreme allele frequencies disabled\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("MARKERLABEL") == 0 &&
+            tokens[0].Length() > 2) {
+            markerLabel = tokens[1];
+            printf("## Set marker header to %s ...\n", (const char *) markerLabel);
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("VERBOSE") == 0)
-         {
-         if (tokens[1] == "ON")
-            {
-            verbose = true;
-            printf("## Verbose output during meta-analysis enabled\n");
+        if (tokens[0].MatchesBeginningOf("MAXWARNINGS") == 0 &&
+            tokens[0].Length() > 2) {
+            maxWarnings = tokens[1].AsInteger();
+            printf("## Set the maximum number of warnings per file to %d ...\n", maxWarnings);
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1)
-            {
-            verbose = false;
-            printf("## Verbose output during meta-analysis disabled\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("PVALUELABEL") == 0 && tokens[0].Length() > 1) {
+            pvalueLabel = tokens[1];
+            printf("## Set p-value header to %s ...\n", (const char *) pvalueLabel);
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("AVERAGEFREQUENCY") == 0 && tokens[0].Length() > 1)
-         {
-         if (markerLookup.Entries())
-            {
-            printf("## ERROR: Meta-analysis in progress - before issuing this command, use CLEAR command\n");
+        if (tokens[0].MatchesBeginningOf("EFFECTLABEL") == 0 && tokens[0].Length() > 1) {
+            effectLabel = tokens[1];
+            printf("## Set effect header to %s ...\n", (const char *) effectLabel);
             continue;
-            }
+        }
 
-         if (tokens[1] == "ON")
-            {
-            averageFrequencies = true;
-            printf("## Averaging of allele frequencies enabled\n");
+        if (tokens[0].MatchesBeginningOf("FREQLABEL") == 0 && tokens[0].Length() > 1) {
+            frequencyLabel = tokens[1];
+            printf("## Set frequency header to %s ...\n", (const char *) frequencyLabel);
+            if (!averageFrequencies)
+                printf("## If you want frequencies to be averaged, issue the 'AVERAGEFREQ ON' command\n");
             continue;
+        }
+
+        if (tokens[0].MatchesBeginningOf("SOURCE") == 0 && tokens[0].Length() > 1) {
+            FILE *ifile = fopen(tokens[1], "rt");
+
+            if (ifile != NULL) {
+                printf("# Processing commands in %s ...\n", (const char *) tokens[1]);
+
+                RunScript(ifile);
+                fclose(ifile);
+                continue;
+            } else {
+                printf("# ERROR: Failed to open file %s ...\n", (const char *) tokens[1]);
+                continue;
             }
-         else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1)
-            {
-            averageFrequencies = false;
-            printf("## Averaging of allele frequencies disabled\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("STDERRLABEL") == 0 && tokens[0].Length() > 2) {
+            stderrLabel = tokens[1];
+            printf("## Set standard error header to %s ...\n", (const char *) stderrLabel);
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("MINMAXFREQUENCY") == 0 && tokens[0].Length() > 3)
-         {
-         if (markerLookup.Entries())
-            {
-            printf("## ERROR: Meta-analysis in progress - before issuing this command, use CLEAR command\n");
+        if (tokens[0].MatchesBeginningOf("STRANDLABEL") == 0 && tokens[0].Length() > 2) {
+            strandLabel = tokens[1];
+            printf("## Set strand header to %s ...\n", (const char *) strandLabel);
+            if (!useStrand) printf("## If you want strand information to be used, issue the 'USESTRAND ON' command\n");
             continue;
+        }
+
+        if (tokens[0].MatchesBeginningOf("SCHEME") == 0 &&
+            tokens[0].Length() > 1)
+            if (markerLookup.Entries()) {
+                printf("## ERROR: Meta-analysis in progress - before changing analysis scheme, use CLEAR command\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("SAMPLESIZE") == 0 &&
+                       tokens[1].Length() > 1) {
+                useStandardErrors = false;
+                printf("## Meta-analysis will be based on sample sizes, p-values and direction of effect ...\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("STDERR") == 0 &&
+                       tokens[1].Length() > 1) {
+                if (studyOverlap) {
+                    printf("## ERROR: STDERR can't be used together with enabled OVERLAP\n");
+                    continue;
+                }
+                useStandardErrors = true;
+                printf("## Meta-analysis will be based on effect sizes and their standard errors ...\n");
+                continue;
             }
 
-         if (tokens[1] == "ON")
-            {
-            minMaxFrequencies = true;
-            printf("## Tracking of extreme allele frequencies enabled\n");
+        if (tokens[0].MatchesBeginningOf("SEPARATOR") == 0 &&
+            tokens[0].Length() > 1)
+            if (tokens[1].MatchesBeginningOf("WHITESPACE") == 0) {
+                separators = " \t";
+                printf("## Set column separator to WHITESPACE ...\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("COMMAS") == 0) {
+                separators = ",";
+                printf("## Set column separator to COMMAS ...\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("TABS") == 0) {
+                separators = "\t";
+                printf("## Set column separator to TAB ...\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("BOTH") == 0) {
+                separators = " \t,";
+                printf("## Set column separator to BOTH ...\n");
+                continue;
+            }
+
+        if (tokens[0].MatchesBeginningOf("PROCESSFILE") == 0 && tokens[0].Length() > 1) {
+            ProcessFile(tokens[1], processedFiles = new FileSummary(processedFiles));
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1)
-            {
-            minMaxFrequencies = false;
-            printf("## Tracking of extreme allele frequencies disabled\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("MINWEIGHT") == 0 &&
+            tokens[0].Length() > 3) {
+            minweight = tokens[1].AsDouble();
+            printf("## Set minimum weight for meta-analysis to %.2f ...\n", minweight);
             continue;
+        }
+
+        if (tokens[0].MatchesBeginningOf("OVERLAP") == 0) {
+            if (tokens[1] == "ON") {
+                if (useStandardErrors) {
+                    printf("## ERROR: OVERLAP can't be used if meta-analysis is based on effect sizes and their standard errors\n");
+                    continue;
+                }
+                studyOverlap = true;
+                printf("## Study overlap enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                studyOverlap = false;
+                printf("## Study overlap disabled\n");
+                continue;
             }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("MARKERLABEL") == 0 &&
-          tokens[0].Length() > 2)
-         {
-         markerLabel = tokens[1];
-         printf("## Set marker header to %s ...\n", (const char *) markerLabel);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("MAXWARNINGS") == 0 &&
-          tokens[0].Length() > 2)
-          {
-          maxWarnings = tokens[1].AsInteger();
-          printf("## Set the maximum number of warnings per file to %d ...\n", maxWarnings);
-          continue;
-          }
-
-      if (tokens[0].MatchesBeginningOf("PVALUELABEL") == 0 && tokens[0].Length() > 1)
-         {
-         pvalueLabel = tokens[1];
-         printf("## Set p-value header to %s ...\n", (const char *) pvalueLabel);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("EFFECTLABEL") == 0 && tokens[0].Length() > 1)
-         {
-         effectLabel = tokens[1];
-         printf("## Set effect header to %s ...\n", (const char *) effectLabel);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("FREQLABEL") == 0 && tokens[0].Length() > 1)
-         {
-         frequencyLabel = tokens[1];
-         printf("## Set frequency header to %s ...\n", (const char *) frequencyLabel);
-         if (!averageFrequencies) printf("## If you want frequencies to be averaged, issue the 'AVERAGEFREQ ON' command\n");
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("SOURCE") == 0 && tokens[0].Length() > 1)
-         {
-         FILE * ifile = fopen(tokens[1], "rt");
-
-         if (ifile != NULL)
-            {
-            printf("# Processing commands in %s ...\n", (const char *) tokens[1]);
-
-            RunScript(ifile);
-            fclose(ifile);
+        if (tokens[0].MatchesBeginningOf("ZCUTOFF") == 0) {
+            zCutoff = tokens[1].AsDouble();
+            printf("## Set Z cutoff to %.2f ...\n", zCutoff);
             continue;
-            }
-         else
-            {
-            printf("# ERROR: Failed to open file %s ...\n", (const char *) tokens[1]);
+        }
+
+        if (tokens.Length() == 2) {
+            printf("## ERROR: The command you issued could not be processed ...\n");
             continue;
-            }
-         }
+        }
 
-      if (tokens[0].MatchesBeginningOf("STDERRLABEL") == 0 && tokens[0].Length() > 2)
-         {
-         stderrLabel = tokens[1];
-         printf("## Set standard error header to %s ...\n", (const char *) stderrLabel);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("STRANDLABEL") == 0 && tokens[0].Length() > 2)
-         {
-         strandLabel = tokens[1];
-         printf("## Set strand header to %s ...\n", (const char *) strandLabel);
-         if (!useStrand) printf("## If you want strand information to be used, issue the 'USESTRAND ON' command\n");
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("SCHEME") == 0 &&
-          tokens[0].Length() > 1)
-         if (markerLookup.Entries())
-            {
-            printf("## ERROR: Meta-analysis in progress - before changing analysis scheme, use CLEAR command\n");
+        if (tokens[0].MatchesBeginningOf("ALLELELABELS") == 0 &&
+            tokens[0].Length() > 1) {
+            firstAllele = tokens[1];
+            secondAllele = tokens[2];
+            printf("## Set allele headers to %s and %s ...\n",
+                   (const char *) firstAllele, (const char *) secondAllele);
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("SAMPLESIZE") == 0 &&
-                  tokens[1].Length() > 1)
-            {
-            useStandardErrors = false;
-            printf("## Meta-analysis will be based on sample sizes, p-values and direction of effect ...\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("OUTFILE") == 0) {
+            outfileround = 1;
+            outfile = tokens[1] + "%d" + tokens[2];
+            printf("## Set output file prefix and suffix to %s and %s ...\n",
+                   (const char *) tokens[1], (const char *) tokens[2]);
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("STDERR") == 0 &&
-                  tokens[1].Length() > 1)
-            {
-            useStandardErrors = true;
-            printf("## Meta-analysis will be based on effect sizes and their standard errors ...\n");
+        }
+
+        if (tokens[0].MatchesBeginningOf("ADDFILTER") == 0 &&
+            tokens[0].Length() > 2) {
+            AddFilter(tokens);
             continue;
+        }
+
+        if (tokens[0].MatchesBeginningOf("LABEL") == 0 &&
+            tokens[2].MatchesBeginningOf("AS") == 0 &&
+            tokens.Length() > 3) {
+            int customId = customVariables.SlowFind(tokens[1]);
+
+            if (customId < 0) {
+                printf("## ERROR: Custom variable '%s' is undefined\n", (const char *) tokens[0]);
+                continue;
             }
 
-      if (tokens[0].MatchesBeginningOf("SEPARATOR") == 0 &&
-          tokens[0].Length() > 1)
-         if (tokens[1].MatchesBeginningOf("WHITESPACE") == 0)
-            {
-            separators = " \t";
-            printf("## Set column separator to WHITESPACE ...\n");
+            customLabels[customId] = tokens[3];
+            printf("## Set header for '%s' to '%s'\n", (const char *) tokens[1], (const char *) tokens[3]);
             continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("COMMAS") == 0)
-            {
-            separators = ",";
-            printf("## Set column separator to COMMAS ...\n");
-            continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("TABS") == 0)
-            {
-            separators = "\t";
-            printf("## Set column separator to TAB ...\n");
-            continue;
-            }
-         else if (tokens[1].MatchesBeginningOf("BOTH") == 0)
-            {
-            separators = " \t,";
-            printf("## Set column separator to BOTH ...\n");
-            continue;
-            }
+        }
 
-      if (tokens[0].MatchesBeginningOf("PROCESSFILE") == 0 && tokens[0].Length() > 1)
-         {
-         ProcessFile(tokens[1], processedFiles = new FileSummary(processedFiles));
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("MINWEIGHT") == 0 &&
-          tokens[0].Length() > 3)
-          {
-          minweight = tokens[1].AsDouble();
-          printf("## Set minimum weight for meta-analysis to %.2f ...\n", minweight);
-          continue;
-          }
-
-      if (tokens.Length() == 2)
-         {
-         printf("## ERROR: The command you issued could not be processed ...\n");
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("ALLELELABELS") == 0 &&
-          tokens[0].Length() > 1)
-         {
-         firstAllele = tokens[1];
-         secondAllele = tokens[2];
-         printf("## Set allele headers to %s and %s ...\n",
-               (const char *) firstAllele, (const char *) secondAllele);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("OUTFILE") == 0)
-         {
-         outfileround = 1;
-         outfile = tokens[1] + "%d" + tokens[2];
-         printf("## Set output file prefix and suffix to %s and %s ...\n",
-                 (const char *) tokens[1], (const char *) tokens[2]);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("ADDFILTER") == 0 &&
-          tokens[0].Length() > 2)
-         {
-         AddFilter(tokens);
-         continue;
-         }
-
-      if (tokens[0].MatchesBeginningOf("LABEL") == 0 &&
-          tokens[2].MatchesBeginningOf("AS") == 0 &&
-          tokens.Length() > 3)
-          {
-          int customId = customVariables.SlowFind(tokens[1]);
-
-          if (customId < 0)
-            {
-            printf("## ERROR: Custom variable '%s' is undefined\n", (const char *) tokens[0]);
-            continue;
-            }
-
-          customLabels[customId] = tokens[3];
-          printf("## Set header for '%s' to '%s'\n", (const char *) tokens[1], (const char *) tokens[3]);
-          continue;
-          }
-
-      printf("## Command not recognized - type HELP to list available commands\n");
-      }
-   }
+        printf("## Command not recognized - type HELP to list available commands\n");
+    }
+}
 
 int main(int argc, char ** argv)
-   {
+{
    // suggested by Albert Vernon Smith to facilitate monitoring of background jobs
    setvbuf(stdout, NULL, _IONBF, 0);
    setvbuf(stderr, NULL, _IONBF, 0);
@@ -2064,24 +2020,24 @@ int main(int argc, char ** argv)
       RunScript(stdin);
    else
       for (int i = 1; i < argc; i++)
-         {
+      {
          FILE * ifile = fopen(argv[i], "rt");
 
          if (ifile != NULL)
-            {
+         {
             printf("# Processing commands in %s ...\n", (const char *) argv[i]);
 
             RunScript(ifile);
             fclose(ifile);
             continue;
-            }
+         }
          else
-            {
+         {
             printf("# Error opening file %s ...\n", (const char *) argv[i]);
             continue;
-            }
          }
+      }
 
    ClearAll();
-   }
+}
  
