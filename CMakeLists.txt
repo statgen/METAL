@@ -12,5 +12,8 @@ message(STATUS "ZLIB version: " ${ZLIB_VERSION_STRING})
 message(STATUS "ZLIB header directory: " ${ZLIB_INCLUDE_DIRS})
 message(STATUS "ZLIB library: " ${ZLIB_LIBRARIES})
 
+enable_testing()
+
 add_subdirectory(libsrc)
 add_subdirectory(metal)
+add_subdirectory(tests)
