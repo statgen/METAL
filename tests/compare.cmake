@@ -3,7 +3,7 @@ if(EXISTS METAANALYSIS1.TBL)
     file(REMOVE METAANALYSIS1.TBL)
 endif()
 if(EXISTS METAANALYSIS1.TBL.info)
-    file(METAANALYSIS1.TBL.info)
+    file(REMOVE METAANALYSIS1.TBL.info)
 endif()
 
 execute_process(COMMAND ${METAL} metal.txt RESULT_VARIABLE metal_exit_code)
