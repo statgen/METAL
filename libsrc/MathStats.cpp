@@ -546,6 +546,160 @@ double betacf(double a, double b, double x)
    }
 
 
+// Bivariate normal distribution (assuming mean = 0 and sd = 1) functions
+//
+
+//  Translated from Alanz Genz's FORTRAN code in mvtnorm R package.
+//  Normal distribution probabilities accurate to 1d-15.
+//  Reference: J.L. Schonfelder, Math Comp 32(1978), pp 1232-1240.
+//
+double normp(double z) {
+    int i, im;
+
+    double bm, b, bp, p, rtwo, t, xa;
+
+    rtwo = 1.414213562373095048801688724209;
+    im = 24;
+
+    double a[44] = { 6.10143081923200417926465815756e-1, -4.34841272712577471828182820888e-1,
+                     1.76351193643605501125840298123e-1, -6.0710795609249414860051215825e-2,
+                     1.7712068995694114486147141191e-2, -4.321119385567293818599864968e-3,
+                     8.54216676887098678819832055e-4, -1.27155090609162742628893940e-4,
+                     1.1248167243671189468847072e-5, 3.13063885421820972630152e-7,
+                     -2.70988068537762022009086e-7, 3.0737622701407688440959e-8,
+                     2.515620384817622937314e-9, -1.028929921320319127590e-9,
+                     2.9944052119949939363e-11, 2.6051789687266936290e-11,
+                     -2.634839924171969386e-12, -6.43404509890636443e-13,
+                     1.12457401801663447e-13, 1.7281533389986098e-14,
+                     -4.264101694942375e-15, -5.45371977880191e-16,
+                     1.58697607761671e-16, 2.0899837844334e-17,
+                     -5.900526869409e-18, -9.41893387554e-19, 2.14977356470e-19,
+                     4.6660985008e-20, -7.243011862e-21, -2.387966824e-21,
+                     1.91177535e-22, 1.20482568e-22, -6.72377e-25, -5.747997e-24,
+                     -4.28493e-25, 2.44856e-25, 4.3793e-26, -8.151e-27, -3.089e-27,
+                     9.3e-29, 1.74e-28, 1.6e-29, -8.0e-30, -2.0e-30
+    };
+
+    xa = fabs(z) / rtwo;
+    if (xa > 100) {
+        p = 0;
+    } else {
+        t = ( 8 * xa - 30 ) / ( 4 * xa + 15 );
+        bm = 0;
+        b  = 0;
+        for (int i = im; i >= 0; --i) {
+            bp = b;
+            b = bm;
+            bm = t * b - bp  + a[i];
+        }
+        p = exp( -xa * xa ) * ( bm - bp ) / 4;
+    }
+    if (z > 0) {
+        p = 1 - p;
+    }
+    return p;
+}
+
+// bivariate normal probability density function
+double binormp(double x, double y, double rho) {
+    double c = 1.0 - rho * rho ;
+    return (1.0 / (2.0 * M_PI * sqrt(c))) * exp(-(x * x - 2.0 * rho * x * y + y * y) / (2 * c));
+}
+
+// Translated from Alanz Genz's FORTRAN code in mvtnorm R package.
+// cumulative distribution function
+// calculates probability that X > lx and Y > ly
+double binormq(double lx, double ly, double rho) {
+    double bvn = 0.0;
+    double twopi = 6.283185307179586;
+
+    int lg, ng;
+
+    double as, a, b, c, d, rs, xs;
+    double sn, asr, h, k, bs, hs, hk;
+
+    // Gauss Legendre Points and Weights
+    double x[3][10] = {
+            {-0.9324695142031522, -0.6612093864662647, -0.2386191860831970, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+            {-0.9815606342467191, -0.9041172563704750, -0.7699026741943050, -0.5873179542866171, -0.3678314989981802, -0.1252334085114692, 0.0, 0.0, 0.0, 0.0},
+            {-0.9931285991850949, -0.9639719272779138, -0.9122344282513259, -0.8391169718222188, -0.7463319064601508, -0.6360536807265150, -0.5108670019508271, -0.3737060887154196, -0.2277858511416451, -0.7652652113349733e-1}
+    };
+
+    // Gauss Legendre Points and Weights
+    double w[3][10] = {
+            {0.1713244923791705, 0.3607615730481384, 0.4679139345726904, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+            {0.4717533638651177e-1, 0.1069393259953183, 0.1600783285433464, 0.2031674267230659, 0.2334925365383547, 0.2491470458134029, 0.0, 0.0, 0.0, 0.0},
+            {0.1761400713915212e-1, 0.4060142980038694e-1, 0.6267204833410906e-1, 0.8327674157670475e-1, 0.1019301198172404, 0.1181945319615184, 0.1316886384491766, 0.1420961093183821, 0.1491729864726037, 0.1527533871307259}
+    };
+
+    if (fabs(rho) < 0.3) {
+        ng = 0;
+        lg = 3;
+    } else if (fabs(rho) < 0.75) {
+        ng = 1;
+        lg = 6;
+    } else {
+        ng = 2;
+        lg = 10;
+    }
+
+    h = lx;
+    k = ly;
+    hk = h * k;
+
+    if (fabs(rho) < 0.925) {
+        hs = ( h * h + k * k ) / 2;
+        asr = asin(rho);
+        for (int i = 0; i < lg; ++i) {
+            sn = sin(asr * ( x[ng][i] + 1.0 ) / 2.0 );
+            bvn = bvn + w[ng][i] * exp( ( sn * hk - hs ) / ( 1.0 - sn * sn ) );
+            sn = sin (asr * (-x[ng][i] + 1 ) / 2.0);
+            bvn = bvn + w[ng][i] * exp( ( sn * hk - hs ) / ( 1.0 - sn * sn ) );
+        }
+        return bvn * asr / (2.0 * twopi) + normp(-h) * normp(-k);
+    } else {
+        if (rho < 0) {
+            k = -k;
+            hk = -hk;
+        }
+        if (fabs(rho) < 1) {
+            as = ( 1.0 - rho )*( 1.0 + rho );
+            a = sqrt(as);
+            bs = pow( h - k, 2.0);
+            c = ( 4 - hk ) / 8;
+            d = ( 12 - hk ) / 16;
+            bvn = a * exp( -(bs / as + hk) / 2 ) * ( 1 - c * (bs - as) * (1 - d * bs / 5) / 3 + c * d * as * as / 5 );
+            if (hk > -160) {
+                b = sqrt(bs);
+                bvn = bvn - exp(-hk / 2) * sqrt(twopi) * normp(-b / a) * b * ( 1 - c * bs *( 1 - d * bs / 5 ) / 3 );
+            }
+            a = a / 2;
+            for (int i = 0; i < lg; ++i) {
+                xs = pow( a * (x[ng][i] + 1), 2.0);
+                rs = sqrt( 1 - xs );
+                bvn = bvn + a * w[ng][i] * ( exp( -bs/ ( 2 * xs) - hk / (1 + rs) )/ rs - exp( -(bs/xs + hk) / 2 )*( 1 + c * xs *( 1 + d * xs ) ) );
+                xs = as * pow(-x[ng][i] +1, 2) / 4;
+                rs = sqrt( 1 - xs );
+                bvn = bvn + a * w[ng][i] * exp( -(bs / xs + hk) / 2 ) * ( exp( -hk * xs / (2 * pow(1 + rs, 2)) ) / rs - ( 1 + c * xs * ( 1 + d * xs ) ) );
+            }
+            bvn = -bvn / twopi;
+        }
+        if (rho > 0) {
+            bvn =  bvn + normp( -max( h, k ) );
+        } else {
+            bvn = -bvn;
+            if (k > h) {
+                if (h < 0) {
+                    bvn = bvn + normp(k)  - normp(h);
+                } else {
+                    bvn = bvn + normp(-h) - normp(-k);
+                }
+            }
+        }
+    }
+
+    return bvn;
+}
 
 
  

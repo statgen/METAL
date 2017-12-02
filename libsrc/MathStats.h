@@ -68,6 +68,13 @@ double betacf(double a, double b, double x);    // Evaluates continued fraction
                                                 // for incomplete beta function
                                                 // by modified Lentz's method
 
+// Bivariate normal distribution (assuming mean = 0 and sd = 1) functions
+//
+
+double normp(double z); // normal distribution probabilities with accuracy up to 1e-15
+double binormp(double x, double y, double rho); // probability density function
+double binormq(double lx, double ly, double rho); // cumulative distribution function: lx <= X and ly <= Y
+
 // Rapid approximation to the sqrt for integers
 //
 
