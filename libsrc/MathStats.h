@@ -18,8 +18,10 @@
 #ifndef _MATHSTATS_H_
 #define _MATHSTATS_H_
 
+#include <limits>
 #include "MathVector.h"
 #include "MathMatrix.h"
+
 
 // Normal distribution functions
 //

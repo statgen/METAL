@@ -602,6 +602,12 @@ double normp(double z) {
 
 // bivariate normal probability density function
 double binormp(double x, double y, double rho) {
+    if (fabs(rho) == 1.0) { // degenerate case
+        if ((x == 0.0) && (y == 0.0)) {
+            return std::numeric_limits<double>::infinity();
+        }
+        return 0.0;
+    }
     double c = 1.0 - rho * rho ;
     return (1.0 / (2.0 * M_PI * sqrt(c))) * exp(-(x * x - 2.0 * rho * x * y + y * y) / (2 * c));
 }
