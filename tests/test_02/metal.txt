@@ -29,6 +29,8 @@
 # ADDFILTER SNP IN (rs10830963,rs563694)
 # VERBOSE ON
 
+OVERLAP ON
+
 # Describe and process the DGI input files
 MARKER   SNP
 WEIGHT   N
@@ -50,17 +52,6 @@ STDERR   SE
 PVAL     PVALUE
 
 PROCESS ../Data/MAGIC_FUSION_Results.txt.gz
-
-# Describe and process the SardiNIA input files
-MARKER   SNP
-DEFAULT  4106
-ALLELE   AL1 AL2
-FREQ     FREQ1
-EFFECT   EFFECT
-STDERR   SE
-PVAL     PVALUE
-
-PROCESS ../Data/magic_SARDINIA.tbl
 
 # Execute meta-analysis
 ANALYZE

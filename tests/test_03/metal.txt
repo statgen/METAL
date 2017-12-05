@@ -15,7 +15,7 @@
 # examined reside in strongly associated loci and it probably 
 # is not a good idea. To find out what happens if you turn
 # on genomic control, uncomment the following line.
-# GENOMICCONTROL ON
+GENOMICCONTROL ON
 
 # To help identify allele flips, it can be useful to track
 # allele frequencies in the meta-analysis. To enable this
