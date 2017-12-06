@@ -12,4 +12,8 @@ For the previous stable versions, please go to https://genome.sph.umich.edu/wiki
 mkdir build && cd build
 cmake ..
 make
+make test
+make install
 ```
+
+The compiled `metal` executable will be installed into `build/bin` directory.
