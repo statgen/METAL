@@ -20,11 +20,14 @@
 #include <math.h>
 #include <ctype.h>
 #include <signal.h>
+#include <MathGold.h>
+#include <map>
 
 StringIntHash markerLookup;
 
 Vector statistics;
 Vector weights;
+Vector samples;
 Vector frequencies;
 Vector frequencies2;
 Vector minFrequencies;
@@ -85,6 +88,8 @@ IntArray    filterCounts;
 
 bool studyOverlap = false;
 double zCutoff = 1.0;
+unsigned int studyOverlapStep = 1000;
+Vector z1, z2;
 
 void UserBreak(int)
    {
@@ -148,33 +153,33 @@ void PrintablePvalue(String & buffer, double statistic)
       }
    }
 
-int CreateNewMarkerId(const String & markerName)
-   {
-   int customColumns = customLabels.Length();
-   int marker = 0;
+int CreateNewMarkerId(const String &markerName) {
+    int customColumns = customLabels.Length();
+    int marker = 0;
 
-   if (markerLookup.Entries() == 0 && customColumns > 0)
-      custom = new Vector[customColumns];
+    if (markerLookup.Entries() == 0 && customColumns > 0)
+        custom = new Vector[customColumns];
 
-   markerLookup.SetInteger(markerName, marker = markerLookup.Entries());
-   statistics.Push(0);
-   if (averageFrequencies) frequencies.Push(0);
-   if (averageFrequencies) frequencies2.Push(0);
-   if (minMaxFrequencies) minFrequencies.Push(_NAN_);
-   if (minMaxFrequencies) maxFrequencies.Push(_NAN_);
-   weights.Push(0);
-   allele1.Push("");
-   allele2.Push("");
-   original_flipped += '?';
+    markerLookup.SetInteger(markerName, marker = markerLookup.Entries());
+    statistics.Push(0);
+    if (averageFrequencies) frequencies.Push(0);
+    if (averageFrequencies) frequencies2.Push(0);
+    if (minMaxFrequencies) minFrequencies.Push(_NAN_);
+    if (minMaxFrequencies) maxFrequencies.Push(_NAN_);
+    weights.Push(0);
+    samples.Push(0);
+    allele1.Push("");
+    allele2.Push("");
+    original_flipped += '?';
 
-   for (int i = 0; i < customColumns; i++)
-      custom[i].Push(0);
+    for (int i = 0; i < customColumns; i++)
+        custom[i].Push(0);
 
-   if (genomicControlFilter.Length())
-      genomicControlFilter += '.';
+    if (genomicControlFilter.Length())
+        genomicControlFilter += '.';
 
-   return marker;
-   }
+    return marker;
+}
 
 int GetMarkerId(const String & markerName)
    {
@@ -197,58 +202,55 @@ void ClearFilters()
    filterSets.Clear();
    }
 
-void ClearAll()
-   {
-   printf("## Clearing all stored statistics ...\n");
-   markerLookup.Clear();
-   statistics.Dimension(0);
-   weights.Dimension(0);
-   allele1.Dimension(0);
-   allele2.Dimension(0);
-   frequencies.Dimension(0);
-   frequencies2.Dimension(0);
-   minFrequencies.Dimension(0);
-   maxFrequencies.Dimension(0);
-   original_flipped.Clear();
-   filenames.Clear();
-   directions.Clear();
-   customVariables.Clear();
-   customLabels.Clear();
+void ClearAll() {
+    printf("## Clearing all stored statistics ...\n");
+    markerLookup.Clear();
+    statistics.Dimension(0);
+    weights.Dimension(0);
+    samples.Dimension(0);
+    allele1.Dimension(0);
+    allele2.Dimension(0);
+    frequencies.Dimension(0);
+    frequencies2.Dimension(0);
+    minFrequencies.Dimension(0);
+    maxFrequencies.Dimension(0);
+    original_flipped.Clear();
+    filenames.Clear();
+    directions.Clear();
+    customVariables.Clear();
+    customLabels.Clear();
 
-   if (custom != NULL)
-      {
-      delete [] custom;
-      custom = NULL;
-      }
+    if (custom != NULL) {
+        delete[] custom;
+        custom = NULL;
+    }
 
-   ClearFilters();
+    ClearFilters();
 
-   if (processedFiles != NULL)
-      {
-      delete processedFiles;
-      processedFiles = NULL;
-      }
-   }
+    if (processedFiles != NULL) {
+        delete processedFiles;
+        processedFiles = NULL;
+    }
+}
 
-int TranslateCondition(String & condition)
-   {
-   if (condition == ">")
-      return GREATER_THAN;
-   else if (condition == ">=")
-      return GREATER_THAN_OR_EQUAL;
-   else if (condition == "<")
-      return LESS_THAN;
-   else if (condition == "<=")
-      return LESS_THAN_OR_EQUAL;
-   else if (condition == "==" || condition == "=" || condition == "IS")
-      return EQUAL_TO;
-   else if (condition == "!=" || condition == "<>" || condition == "ISNOT" )
-      return NOT_EQUAL_TO;
-   else if (condition == "IN")
-      return STRING_IN_SET;
-   else
-      return -1;
-   }
+int TranslateCondition(String &condition) {
+    if (condition == ">")
+        return GREATER_THAN;
+    else if (condition == ">=")
+        return GREATER_THAN_OR_EQUAL;
+    else if (condition == "<")
+        return LESS_THAN;
+    else if (condition == "<=")
+        return LESS_THAN_OR_EQUAL;
+    else if (condition == "==" || condition == "=" || condition == "IS")
+        return EQUAL_TO;
+    else if (condition == "!=" || condition == "<>" || condition == "ISNOT")
+        return NOT_EQUAL_TO;
+    else if (condition == "IN")
+        return STRING_IN_SET;
+    else
+        return -1;
+}
 
 void AddFilter(StringArray & filter)
    {
@@ -516,769 +518,873 @@ bool GuessSecondAllele(int marker, String & al1, String & al2)
 int    outfileround = 1;
 String outfile("METAANALYSIS%d.TBL");
 
-void Analyze(bool heterogeneity)
-   {
-   if (heterogeneity)
-      {
-      printf("###########################################################################\n");
-      printf("## Running second pass analysis to evaluate heterogeneity...\n");
+void Analyze(bool heterogeneity) {
+    if (heterogeneity) {
+        printf("###########################################################################\n");
+        printf("## Running second pass analysis to evaluate heterogeneity...\n");
 
-      hetDegreesOfFreedom.Dimension(statistics.Length());
-      hetDegreesOfFreedom.Zero();
+        hetDegreesOfFreedom.Dimension(statistics.Length());
+        hetDegreesOfFreedom.Zero();
 
-      hetStatistic.Dimension(statistics.Length());
-      hetStatistic.Zero();
+        hetStatistic.Dimension(statistics.Length());
+        hetStatistic.Zero();
 
-      FileSummary * pointer = processedFiles;
+        FileSummary *pointer = processedFiles;
 
-      while (pointer != NULL)
-         {
-         if (!ReProcessFile(pointer))
-            {
-            printf("## WARNING: Heterogeneity analysis failed...\n");
-            heterogeneity = false;
-            break;
+        while (pointer != NULL) {
+            if (!ReProcessFile(pointer)) {
+                printf("## WARNING: Heterogeneity analysis failed...\n");
+                heterogeneity = false;
+                break;
             }
 
-         pointer = pointer->next;
-         }
-      printf("\n");
-      }
+            pointer = pointer->next;
+        }
+        printf("\n");
+    }
 
-   String filename;
-   filename.printf(outfile, outfileround++);
+    String filename;
+    filename.printf(outfile, outfileround++);
 
-   printf("###########################################################################\n");
-   printf("## Executing meta-analysis ...\n");
-   printf("## Complete results will be stored in file '%s'\n", (const char *) filename);
-   printf("## Column descriptions will be stored in file '%s.info'\n", (const char *) filename);
+    printf("###########################################################################\n");
+    printf("## Executing meta-analysis ...\n");
+    printf("## Complete results will be stored in file '%s'\n", (const char *) filename);
+    printf("## Column descriptions will be stored in file '%s.info'\n", (const char *) filename);
 
-   FILE * f = fopen(filename, "wt");
+    FILE *f = fopen(filename, "wt");
 
-   if (f == NULL)
-      {
-      printf("ERROR: Failed to open output file '%s' ... \n",
-             (const char *) filename);
-      return;
-      }
+    if (f == NULL) {
+        printf("ERROR: Failed to open output file '%s' ... \n",
+               (const char *) filename);
+        return;
+    }
 
-   fprintf(f, "MarkerName\tAllele1\tAllele2\t%s%s%s\t%s\t%s\tDirection%s%s",
-              averageFrequencies ? "Freq1\tFreqSE\t" : "",
-              minMaxFrequencies ? "MinFreq\tMaxFreq\t" : "",
-              useStandardErrors ? "Effect" : "Weight",
-              useStandardErrors ? "StdErr" : "Zscore",
-              logPValue ? "log(P)" : "P-value",
-              heterogeneity ? "\tHetISq\tHetChiSq\tHetDf\t" : "",
-              heterogeneity ? (logPValue ? "logHetP" : "HetPVal") : "");
+    fprintf(f, "MarkerName\tAllele1\tAllele2\t%s%s%s\t%s%s\t%s\tDirection%s%s",
+            averageFrequencies ? "Freq1\tFreqSE\t" : "",
+            minMaxFrequencies ? "MinFreq\tMaxFreq\t" : "",
+            useStandardErrors ? "Effect" : "Weight",
+            useStandardErrors ? "StdErr" : "Zscore",
+            studyOverlap ? "\tN" : "",
+            logPValue ? "log(P)" : "P-value",
+            heterogeneity ? "\tHetISq\tHetChiSq\tHetDf\t" : "",
+            heterogeneity ? (logPValue ? "logHetP" : "HetPVal") : "");
 
-   for (int i = 0; i < customVariables.Length(); i++)
-      fprintf(f, "\t%s", (const char *) customVariables[i]);
+    for (int i = 0; i < customVariables.Length(); i++)
+        fprintf(f, "\t%s", (const char *) customVariables[i]);
 
-   fprintf(f, "\n");
+    fprintf(f, "\n");
 
-   double largeStatistic = 0.0;
-   String smallp("1.0");
-   String smallm("nothing tested");
+    double largeStatistic = 0.0;
+    String smallp("1.0");
+    String smallm("nothing tested");
 
-   String al1, al2;
+    String al1, al2;
 
-   String direction;
+    String direction;
 
-   int count = 0, skipped = 0;
-   for (int i = 0; i < markerLookup.Capacity(); i++)
-      if (markerLookup.SlotInUse(i))
-         {
-         int marker = markerLookup.Integer(i);
+    int count = 0, skipped = 0;
+    for (int i = 0; i < markerLookup.Capacity(); i++)
+        if (markerLookup.SlotInUse(i)) {
+            int marker = markerLookup.Integer(i);
 
-         if (weights[marker] == 0.0) continue;
+            if (weights[marker] == 0.0) continue;
 
-         if (!useStandardErrors && weights[marker] < minweight)
-            {
-            skipped++;
-            continue;
+            if (!useStandardErrors && weights[marker] < minweight) {
+                skipped++;
+                continue;
             }
 
-         double statistic = statistics[marker] / sqrt(weights[marker]);
-         double frequency = averageFrequencies ? frequencies[marker] / weights[marker] : 0.5;
-         double frequency2 = averageFrequencies ? frequencies2[marker] / weights[marker] : 0.5;
-         double minFrequency = minMaxFrequencies ? minFrequencies[marker] : 0.5;
-         double maxFrequency = minMaxFrequencies ? maxFrequencies[marker] : 0.5;
+            double statistic = statistics[marker] / sqrt(weights[marker]);
+            double frequency = averageFrequencies ? frequencies[marker] / weights[marker] : 0.5;
+            double frequency2 = averageFrequencies ? frequencies2[marker] / weights[marker] : 0.5;
+            double minFrequency = minMaxFrequencies ? minFrequencies[marker] : 0.5;
+            double maxFrequency = minMaxFrequencies ? maxFrequencies[marker] : 0.5;
 
-         // double pvalue = 2.0 * ndist(fabs(statistic), true);
-         String pvalue;
-         PrintablePvalue(pvalue, statistic);
 
-         frequency2 = frequency2 - frequency * frequency;
-         frequency2 = frequency2 > 0.0 ? sqrt(frequency2) : 0.0;
+            // double pvalue = 2.0 * ndist(fabs(statistic), true);
+            String pvalue;
+            PrintablePvalue(pvalue, statistic);
 
-         al1 = allele1[marker];
-         al2 = allele2[marker];
+            frequency2 = frequency2 - frequency * frequency;
+            frequency2 = frequency2 > 0.0 ? sqrt(frequency2) : 0.0;
 
-         if (original_flipped[marker] == 'Y')
-            FlipAllele(al1), FlipAllele(al2);
+            al1 = allele1[marker];
+            al2 = allele2[marker];
 
-         direction.Clear();
-         for (int j = 0; j < filenames.Length(); j++)
-            direction += marker < directions[j].Length() ? directions[j][marker] : '?';
+            if (original_flipped[marker] == 'Y')
+                FlipAllele(al1), FlipAllele(al2);
 
-         fprintf(f, "%s\t%s\t%s\t",
-                  (const char *) markerLookup[i],
-                  (const char *) al1,
-                  (const char *) al2);
+            direction.Clear();
+            for (int j = 0; j < filenames.Length(); j++)
+                direction += marker < directions[j].Length() ? directions[j][marker] : '?';
 
-         if (averageFrequencies)
-            fprintf(f, "%.4f\t%.4f\t", frequency, frequency2);
+            fprintf(f, "%s\t%s\t%s\t",
+                    (const char *) markerLookup[i],
+                    (const char *) al1,
+                    (const char *) al2);
 
-         if (minMaxFrequencies)
-            fprintf(f, "%.4f\t%.4f\t", minFrequency, maxFrequency);
+            if (averageFrequencies)
+                fprintf(f, "%.4f\t%.4f\t", frequency, frequency2);
 
-         fprintf(f, "%.*f\t%.*f\t%s\t%s",
-                  useStandardErrors ? 4 : 2,
-                  useStandardErrors ? statistics[marker] / weights[marker] : weights[marker],
-                  useStandardErrors ? 4 : 3,
-                  useStandardErrors ? sqrt(1.0 / weights[marker]) : statistic,
-                  (const char *) pvalue,
-                  (const char *) direction);
-         count++;
+            if (minMaxFrequencies)
+                fprintf(f, "%.4f\t%.4f\t", minFrequency, maxFrequency);
 
-         if (heterogeneity)
-            {
-            double p =
-               (hetStatistic[marker] < 1e-7 || hetDegreesOfFreedom[marker] <= 1) ?
-               1.0 : chidist(hetStatistic[marker], hetDegreesOfFreedom[marker] - 1);
-            double I2 =
-               (hetStatistic[marker] <= hetDegreesOfFreedom[marker] - 1) || hetDegreesOfFreedom[marker] <= 1 ?
-               0.0 : (hetStatistic[marker] - hetDegreesOfFreedom[marker] + 1) / hetStatistic[marker] * 100.;
+            fprintf(f, "%.*f\t%.*f\t",
+                    useStandardErrors ? 4 : 2,
+                    useStandardErrors ? statistics[marker] / weights[marker] : weights[marker],
+                    useStandardErrors ? 4 : 3,
+                    useStandardErrors ? sqrt(1.0 / weights[marker]) : statistic);
 
-            if (logPValue) p = (p < 1.0) ? log(p) / log(10.0) : 0.0;
+            if (studyOverlap) {
+                fprintf(f, "%.2f\t", samples[marker]);
+            }
 
-            fprintf(f, "\t%.1f\t%.3f\t%d\t%.4g",
+            fprintf(f, "%s\t%s",
+                    (const char *) pvalue,
+                    (const char *) direction);
+            count++;
+
+            if (heterogeneity) {
+                double p =
+                        (hetStatistic[marker] < 1e-7 || hetDegreesOfFreedom[marker] <= 1) ?
+                        1.0 : chidist(hetStatistic[marker], hetDegreesOfFreedom[marker] - 1);
+                double I2 =
+                        (hetStatistic[marker] <= hetDegreesOfFreedom[marker] - 1) || hetDegreesOfFreedom[marker] <= 1 ?
+                        0.0 : (hetStatistic[marker] - hetDegreesOfFreedom[marker] + 1) / hetStatistic[marker] * 100.;
+
+                if (logPValue) p = (p < 1.0) ? log(p) / log(10.0) : 0.0;
+
+                fprintf(f, "\t%.1f\t%.3f\t%d\t%.4g",
                         I2, hetStatistic[marker], hetDegreesOfFreedom[marker] - 1, p);
             }
 
-         for (int j = 0; j < customVariables.Length(); j++)
-            fprintf(f, "\t%g", custom[j][marker]);
+            for (int j = 0; j < customVariables.Length(); j++)
+                fprintf(f, "\t%g", custom[j][marker]);
 
-         fprintf(f, "\n");
+            fprintf(f, "\n");
 
-         if (fabs(statistic) > largeStatistic)
-            {
-            largeStatistic = fabs(statistic);
-            smallp = pvalue;
-            smallm = markerLookup[i];
+            if (fabs(statistic) > largeStatistic) {
+                largeStatistic = fabs(statistic);
+                smallp = pvalue;
+                smallm = markerLookup[i];
             }
-         }
+        }
 
-   printf("## Completed meta-analysis for %d markers!\n", count);
+    printf("## Completed meta-analysis for %d markers!\n", count);
 
-   if (largeStatistic > 0.0)
-      printf("## Smallest p-value is %s at marker '%s'\n", (const char *) smallp, (const char *) smallm);
+    if (largeStatistic > 0.0)
+        printf("## Smallest p-value is %s at marker '%s'\n", (const char *) smallp, (const char *) smallm);
 
-   if (skipped)
-      printf("## A total of %d markers with less than MINWEIGHT = %g were skipped\n", skipped, minweight);
+    if (skipped)
+        printf("## A total of %d markers with less than MINWEIGHT = %g were skipped\n", skipped, minweight);
 
-   printf("\n");
+    printf("\n");
 
-   fclose(f);
+    fclose(f);
 
-   f = fopen(filename + ".info", "wt");
+    f = fopen(filename + ".info", "wt");
 
-   if (f == NULL)
-      {
-      printf("ERROR: Failed to open output file '%s.info' ... \n",
-             (const char *) filename);
-      return;
-      }
+    if (f == NULL) {
+        printf("ERROR: Failed to open output file '%s.info' ... \n",
+               (const char *) filename);
+        return;
+    }
 
-   fprintf(f, "# This file contains a short description of the columns in the\n"
-              "# meta-analysis summary file, named '%s'\n\n"
-              "# Marker    - this is the marker name\n"
-              "# Allele1   - the first allele for this marker in the first file where it occurs\n"
-              "# Allele2   - the second allele for this marker in the first file where it occurs\n"
-              "%s"
-              "%s"
-              "%s\n"
-              "# %s meta-analysis p-value\n"
-              "# Direction - summary of effect direction for each study, with one '+' or '-' per study\n"
-              "%s%s",
-              (const char *) filename,
-              !averageFrequencies ? "" :
-              "# Freq1       - weighted average of frequency for allele 1 across all studies\n"
-              "# FreqSE      - corresponding standard error for allele frequency estimate\n",
-              !minMaxFrequencies ? "" :
-              "# MinFreq     - minimum frequency for allele 1 across all studies\n"
-              "# MaxFreq     - maximum frequency for allele 1 across all studies\n",
-              useStandardErrors ?
-              "# Effect    - overall estimated effect size for allele1\n"
-              "# StdErr    - overall standard error for effect size estimate" :
-              "# Weight    - the sum of the individual study weights (typically, N) for this marker\n"
-              "# Z-score   - the combined z-statistic for this marker",
-              logPValue ? "log(P)    - log of" : "P-value   -",
-              !heterogeneity ? "" :
-              "# HetISq    - I^2 statistic which measures heterogeneity on scale of 0-100%\n"
-              "# HetChiSq  - chi-squared statistic in simple test of heterogeneity\n"
-              "# df        - degrees of freedom for heterogeneity statistic\n",
-              !heterogeneity ? "" :
-              logPValue ?
-              "# logHetP   - log of p-value for heterogeneity statistic\n" :
-              "# HetPVal   - P-value for heterogeneity statistic\n");
+    fprintf(f, "# This file contains a short description of the columns in the\n"
+                    "# meta-analysis summary file, named '%s'\n\n"
+                    "# Marker    - this is the marker name\n"
+                    "# Allele1   - the first allele for this marker in the first file where it occurs\n"
+                    "# Allele2   - the second allele for this marker in the first file where it occurs\n"
+                    "%s"
+                    "%s"
+                    "%s\n"
+                    "# %s meta-analysis p-value\n"
+                    "# Direction - summary of effect direction for each study, with one '+' or '-' per study\n"
+                    "%s%s",
+            (const char *) filename,
+            !averageFrequencies ? "" :
+            "# Freq1       - weighted average of frequency for allele 1 across all studies\n"
+                    "# FreqSE      - corresponding standard error for allele frequency estimate\n",
+            !minMaxFrequencies ? "" :
+            "# MinFreq     - minimum frequency for allele 1 across all studies\n"
+                    "# MaxFreq     - maximum frequency for allele 1 across all studies\n",
+            useStandardErrors ?
+            "# Effect    - overall estimated effect size for allele1\n"
+                    "# StdErr    - overall standard error for effect size estimate" :
+            "# Weight    - the sum of the individual study weights (typically, N) for this marker\n"
+                    "# Z-score   - the combined z-statistic for this marker",
+            logPValue ? "log(P)    - log of" : "P-value   -",
+            !heterogeneity ? "" :
+            "# HetISq    - I^2 statistic which measures heterogeneity on scale of 0-100%\n"
+                    "# HetChiSq  - chi-squared statistic in simple test of heterogeneity\n"
+                    "# df        - degrees of freedom for heterogeneity statistic\n",
+            !heterogeneity ? "" :
+            logPValue ?
+            "# logHetP   - log of p-value for heterogeneity statistic\n" :
+            "# HetPVal   - P-value for heterogeneity statistic\n");
 
-   for (int i = 0; i < customVariables.Length(); i++)
-      fprintf(f, "# %-9s - custom variable %d\n", (const char *) customVariables[i], i+1);
+    for (int i = 0; i < customVariables.Length(); i++)
+        fprintf(f, "# %-9s - custom variable %d\n", (const char *) customVariables[i], i + 1);
 
-   fprintf(f, "\n# Input for this meta-analysis was stored in the files:\n");
-   for (int i = 0; i < filenames.Length(); i++)
-      fprintf(f, "# --> Input File %d : %s\n", i + 1, (const char *) filenames[i]);
-   fprintf(f, "\n");
+    fprintf(f, "\n# Input for this meta-analysis was stored in the files:\n");
+    for (int i = 0; i < filenames.Length(); i++)
+        fprintf(f, "# --> Input File %d : %s\n", i + 1, (const char *) filenames[i]);
+    fprintf(f, "\n");
 
-   fclose(f);
-   }
+    fclose(f);
+}
 
 bool flip = false;
 
 
-void ProcessFile(String & filename, FileSummary * history)
-   {
-   IFILE f = ifopen(history->filename = filename, "rb");
-   history->processedMarkers = 0;
+double trunc_norm(double rho) {
+    double sum_d = 0.0;
+    for (int i = 0; i < z1.Length(); ++i) {
+        sum_d += log(binormp(z1[i], z2[i], rho));
+    }
+    double l = -sum_d + z1.Length() * log(binormq(-1, -1, rho) - binormq(-1, 1, rho) - binormq(1, -1, rho) + binormq(1, 1, rho));
+    return l;
+}
 
-   if (f == NULL)
-      {
-      printf("## Failed to open file '%s'\n", (const char *) filename);
-      return;
-      }
 
-   printf("###########################################################################\n");
-   printf("## Processing file '%s'\n", (const char *) filename);
+void ProcessFile(String & filename, FileSummary * history) {
+    IFILE f = ifopen(history->filename = filename, "rb");
+    history->processedMarkers = 0;
 
-   String input;
-   StringArray tokens;
+    if (f == NULL) {
+        printf("## Failed to open file '%s'\n", (const char *) filename);
+        return;
+    }
 
-   tokens.ReplaceTokens(input.ReadLine(f), separators);
-   history->header = input;
+    printf("###########################################################################\n");
+    printf("## Processing file '%s'\n", (const char *) filename);
 
-   if (tokens.Length() == 0)
-      {
-      printf("## ERROR: Header line is empty\n\n");
-      ifclose(f);
-      return;
-      }
+    String input;
+    StringArray tokens;
 
-   int markerColumn = history->markerColumn = tokens.SlowFind(markerLabel);
-   if (markerColumn < 0)
-      {
-      printf("## ERROR: No '%s' column found\n\n", (const char *) markerLabel);
-      ifclose(f);
-      return;
-      }
+    tokens.ReplaceTokens(input.ReadLine(f), separators);
+    history->header = input;
 
-   int pvalueColumn = history->pvalueColumn = tokens.SlowFind(pvalueLabel);
-   if (pvalueColumn < 0 && !useStandardErrors)
-      {
-      printf("## ERROR: No '%s' column found\n\n", (const char *) pvalueLabel);
-      ifclose(f);
-      return;
-      }
+    if (tokens.Length() == 0) {
+        printf("## ERROR: Header line is empty\n\n");
+        ifclose(f);
+        return;
+    }
 
-   int  effectColumn = history->effectColumn = tokens.SlowFind(effectLabel);
-   bool logTransform = history->logTransform = false;
-   if (effectColumn < 0 && effectLabel.Left(4) == "log(" && effectLabel.Last() == ')')
-      {
-      logTransform = history->logTransform = true;
-      effectColumn = history->effectColumn = tokens.SlowFind(effectLabel.Mid(4,effectLabel.Length() - 2).Trim());
-      }
+    int markerColumn = history->markerColumn = tokens.SlowFind(markerLabel);
+    if (markerColumn < 0) {
+        printf("## ERROR: No '%s' column found\n\n", (const char *) markerLabel);
+        ifclose(f);
+        return;
+    }
 
-   if (effectColumn < 0)
-      if (!useStandardErrors)
-         printf("## WARNING: No '%s' column found -- assuming all effects are positive!\n", (const char *) effectLabel);
-      else
-         {
-         printf("## ERROR: No '%s' column found\n\n", (const char *) effectLabel);
-         ifclose(f);
-         return;
-         }
+    int pvalueColumn = history->pvalueColumn = tokens.SlowFind(pvalueLabel);
+    if (pvalueColumn < 0 && !useStandardErrors) {
+        printf("## ERROR: No '%s' column found\n\n", (const char *) pvalueLabel);
+        ifclose(f);
+        return;
+    }
 
-   int weightColumn = history->weightColumn = tokens.SlowFind(weightLabel);
-   if (weightColumn < 0 && !useStandardErrors)
-      printf("## WARNING: No '%s' column found -- using DEFAULTWEIGHT = %g\n", (const char *) weightLabel, weight);
+    int effectColumn = history->effectColumn = tokens.SlowFind(effectLabel);
+    bool logTransform = history->logTransform = false;
+    if (effectColumn < 0 && effectLabel.Left(4) == "log(" && effectLabel.Last() == ')') {
+        logTransform = history->logTransform = true;
+        effectColumn = history->effectColumn = tokens.SlowFind(effectLabel.Mid(4, effectLabel.Length() - 2).Trim());
+    }
 
-   int firstColumn = history->firstColumn = tokens.SlowFind(firstAllele);
-   int secondColumn = history->secondColumn = tokens.SlowFind(secondAllele);
-   bool guessAlleles = false;
+    if (effectColumn < 0)
+        if (!useStandardErrors)
+            printf("## WARNING: No '%s' column found -- assuming all effects are positive!\n",
+                   (const char *) effectLabel);
+        else {
+            printf("## ERROR: No '%s' column found\n\n", (const char *) effectLabel);
+            ifclose(f);
+            return;
+        }
 
-   if (firstColumn >= 0 && secondColumn < 0)
-      {
-      printf("## WARNING: Column '%s' not found, will try to guess second allele\n",
-             (const char *) secondAllele);
-      guessAlleles = true;
-      }
+    int weightColumn = history->weightColumn = tokens.SlowFind(weightLabel);
+    if (weightColumn < 0 && !useStandardErrors)
+        printf("## WARNING: No '%s' column found -- using DEFAULTWEIGHT = %g\n", (const char *) weightLabel, weight);
 
-   if (firstColumn < 0)
-      printf("## WARNING: Column '%s', '%s' or both not found -- assuming all effects refer to same allele\n",
-             (const char *) firstAllele, (const char *) secondAllele, firstColumn = 0);
+    int firstColumn = history->firstColumn = tokens.SlowFind(firstAllele);
+    int secondColumn = history->secondColumn = tokens.SlowFind(secondAllele);
+    bool guessAlleles = false;
 
-   int stderrColumn = history->stderrColumn = tokens.SlowFind(stderrLabel);
-   if (stderrColumn < 0 && useStandardErrors)
-      {
-      printf("## ERROR: Analysis based on standard errors requested but no '%s' column found\n\n", (const char *) stderrLabel);
-      ifclose(f);
-      return;
-      }
+    if (firstColumn >= 0 && secondColumn < 0) {
+        printf("## WARNING: Column '%s' not found, will try to guess second allele\n",
+               (const char *) secondAllele);
+        guessAlleles = true;
+    }
 
-   bool useFrequencies = minMaxFrequencies || averageFrequencies;
-   int freqColumn = history->freqColumn = tokens.SlowFind(frequencyLabel);
-   if (freqColumn < 0 && useFrequencies)
-      {
-      printf("## ERROR: Averaging of allele frequencies requested, but no '%s' column found\n\n", (const char *) frequencyLabel);
-      ifclose(f);
-      return;
-      }
+    if (firstColumn < 0)
+        printf("## WARNING: Column '%s', '%s' or both not found -- assuming all effects refer to same allele\n",
+               (const char *) firstAllele, (const char *) secondAllele, firstColumn = 0);
 
-   int strandColumn = history->strandColumn = tokens.SlowFind(strandLabel);
-   if (strandColumn < 0 && useStrand)
-      {
-      printf("## ERROR: Strand column labeleled '%s' not found\n\n", (const char *) strandLabel);
-      ifclose(f);
-      return;
-      }
+    int stderrColumn = history->stderrColumn = tokens.SlowFind(stderrLabel);
+    if (stderrColumn < 0 && useStandardErrors) {
+        printf("## ERROR: Analysis based on standard errors requested but no '%s' column found\n\n",
+               (const char *) stderrLabel);
+        ifclose(f);
+        return;
+    }
 
-   SetupFilters(tokens);
-   history->filterLabel = filterLabel;
-   history->filterColumn = filterColumn;
-   history->filterCondition = filterCondition;
-   history->filterValue = filterValue;
-   history->filterAlternate = filterAlternate;
-   history->filterSets = filterSets;
-   history->filterCounts = filterCounts;
+    bool useFrequencies = minMaxFrequencies || averageFrequencies;
+    int freqColumn = history->freqColumn = tokens.SlowFind(frequencyLabel);
+    if (freqColumn < 0 && useFrequencies) {
+        printf("## ERROR: Averaging of allele frequencies requested, but no '%s' column found\n\n",
+               (const char *) frequencyLabel);
+        ifclose(f);
+        return;
+    }
 
-   int minColumns = markerColumn + 1;
-   if (weightColumn >= minColumns && !useStandardErrors) minColumns = weightColumn + 1;
-   if (effectColumn >= minColumns) minColumns = effectColumn + 1;
-   if (pvalueColumn >= minColumns && !useStandardErrors) minColumns = pvalueColumn + 1;
-   if (firstColumn >= minColumns)  minColumns = firstColumn + 1;
-   if (secondColumn >= minColumns) minColumns = secondColumn + 1;
-   if (stderrColumn >= minColumns && useStandardErrors) minColumns = stderrColumn + 1;
-   if (strandColumn >= minColumns && useStrand) minColumns = strandColumn + 1;
-   if (freqColumn >= minColumns && useFrequencies) minColumns = freqColumn + 1;
-   if (filterColumn.Max() >= minColumns) minColumns = filterColumn.Max() + 1;
+    int strandColumn = history->strandColumn = tokens.SlowFind(strandLabel);
+    if (strandColumn < 0 && useStrand) {
+        printf("## ERROR: Strand column labeleled '%s' not found\n\n", (const char *) strandLabel);
+        ifclose(f);
+        return;
+    }
 
-   IntArray customColumns(customLabels.Length());
-   for (int i = 0; i < customLabels.Length(); i++)
-      {
-      customColumns[i] = tokens.SlowFind(customLabels[i]);
-      if (customColumns[i] < 0)
-         {
-         printf("## ERROR: Required column '%s' not found\n\n", (const char *) customLabels[i]);
-         ifclose(f);
-         return;
-         }
-      }
-   if (customColumns.Max() > minColumns)
-      minColumns = customColumns.Max();
+    SetupFilters(tokens);
+    history->filterLabel = filterLabel;
+    history->filterColumn = filterColumn;
+    history->filterCondition = filterCondition;
+    history->filterValue = filterValue;
+    history->filterAlternate = filterAlternate;
+    history->filterSets = filterSets;
+    history->filterCounts = filterCounts;
 
-   history->minColumns = minColumns;
+    int minColumns = markerColumn + 1;
+    if (weightColumn >= minColumns && !useStandardErrors) minColumns = weightColumn + 1;
+    if (effectColumn >= minColumns) minColumns = effectColumn + 1;
+    if (pvalueColumn >= minColumns && !useStandardErrors) minColumns = pvalueColumn + 1;
+    if (firstColumn >= minColumns) minColumns = firstColumn + 1;
+    if (secondColumn >= minColumns) minColumns = secondColumn + 1;
+    if (stderrColumn >= minColumns && useStandardErrors) minColumns = stderrColumn + 1;
+    if (strandColumn >= minColumns && useStrand) minColumns = strandColumn + 1;
+    if (freqColumn >= minColumns && useFrequencies) minColumns = freqColumn + 1;
+    if (filterColumn.Max() >= minColumns) minColumns = filterColumn.Max() + 1;
 
-   int expectedColumns = tokens.Length();
-   history->expectedColumns = expectedColumns;
-   history->strictColumnCounting = strictColumnCounting;
+    IntArray customColumns(customLabels.Length());
+    for (int i = 0; i < customLabels.Length(); i++) {
+        customColumns[i] = tokens.SlowFind(customLabels[i]);
+        if (customColumns[i] < 0) {
+            printf("## ERROR: Required column '%s' not found\n\n", (const char *) customLabels[i]);
+            ifclose(f);
+            return;
+        }
+    }
+    if (customColumns.Max() > minColumns)
+        minColumns = customColumns.Max();
 
-   Vector backupStatistics, backupWeights, backupFrequencies, backupFrequencies2;
-   Vector chiSquareds;
+    history->minColumns = minColumns;
 
-   if (genomicControl)
-      {
-      backupStatistics = statistics;
-      statistics.Zero();
-      }
+    int expectedColumns = tokens.Length();
+    history->expectedColumns = expectedColumns;
+    history->strictColumnCounting = strictColumnCounting;
 
-   if (genomicControl && useStandardErrors)
-      {
-      backupFrequencies2 = frequencies2;
-      backupFrequencies = frequencies;
-      backupWeights = weights;
+    Vector backupStatistics, backupWeights, backupSamples, backupFrequencies, backupFrequencies2;
+    Vector chiSquareds;
 
-      frequencies2.Zero();
-      frequencies.Zero();
-      weights.Zero();
-      }
+    if (genomicControl) {
+        backupStatistics = statistics;
+        statistics.Zero();
+    }
 
-   String direction;
-   direction.Fill('?', allele1.Length());
+    if (genomicControl && useStandardErrors) {
+        backupFrequencies2 = frequencies2;
+        backupFrequencies = frequencies;
+        backupWeights = weights;
 
-   int invalid = 0;
-   int invalidEffect = 0;
-   int badAlleles = 0;
-   int badGuesses = 0;
-   int duplicates = 0;
-   int blindGuesses = 0;
-   int wrongColumnCount = 0;
-   int shortColumnCount = 0;
+        frequencies2.Zero();
+        frequencies.Zero();
+        weights.Zero();
+    }
 
-   history->weight = weight;
+    // DT
+    if (studyOverlap) {
+        if (!genomicControl) {
+            backupStatistics = statistics;
+            statistics.Zero();
+        }
+        if (!useStandardErrors) { // currently always true for this method
+            backupWeights = weights;
+            backupSamples = samples;
+            weights.Zero();
+            samples.Zero();
+        }
+    }
 
-   filenames.Push(filename);
+    String direction;
+    direction.Fill('?', allele1.Length());
 
-   if (verbose)
-      {
-      printf("# MARKER\tAL1\tAL2\t");
+    int invalid = 0;
+    int invalidEffect = 0;
+    int badAlleles = 0;
+    int badGuesses = 0;
+    int duplicates = 0;
+    int blindGuesses = 0;
+    int wrongColumnCount = 0;
+    int shortColumnCount = 0;
 
-      if (!useStandardErrors)
-         printf("N\tZ\tPVAL\t");
-      else
-         printf("EFF\tSTDERR\tPVAL\t");
+    history->weight = weight;
 
-      if (minMaxFrequencies || averageFrequencies)
-         printf("FREQ\t");
+    filenames.Push(filename);
 
-      printf("SOURCE\n");
-      }
+    if (verbose) {
+        printf("# MARKER\tAL1\tAL2\t");
 
-   history->separators = separators;
-   history->useStrand = useStrand;
-   while (!ifeof(f))
-      {
-      if (separators.Length() != 1)
-         tokens.ReplaceTokens(input.ReadLine(f).Trim(), separators);
-      else
-         tokens.ReplaceColumns(input.ReadLine(f), separators[0]);
+        if (!useStandardErrors)
+            printf("N\tZ\tPVAL\t");
+        else
+            printf("EFF\tSTDERR\tPVAL\t");
 
-      if (input[0] == '#') continue;
-      if (tokens.Length() == 0) continue;
+        if (minMaxFrequencies || averageFrequencies)
+            printf("FREQ\t");
 
-      if (tokens.Length() != expectedColumns)
-         {
-         wrongColumnCount++;
-         if (strictColumnCounting) continue;
-         }
+        printf("SOURCE\n");
+    }
 
-      if (tokens.Length() < minColumns)
-         {
-         shortColumnCount++;
-         continue;
-         }
+    history->separators = separators;
+    history->useStrand = useStrand;
+    while (!ifeof(f)) {
+        if (separators.Length() != 1)
+            tokens.ReplaceTokens(input.ReadLine(f).Trim(), separators);
+        else
+            tokens.ReplaceColumns(input.ReadLine(f), separators[0]);
 
-      if (!ApplyFilter(tokens)) continue;
+        if (input[0] == '#') continue;
+        if (tokens.Length() == 0) continue;
 
-      int marker = markerLookup.Integer(tokens[markerColumn]);
+        if (tokens.Length() != expectedColumns) {
+            wrongColumnCount++;
+            if (strictColumnCounting) continue;
+        }
 
-      if (marker < 0 && guessAlleles)
-         {
-         if (++blindGuesses > maxWarnings) continue;
-         printf("## WARNING: Can't guess alleles for '%s', marker not seen in previous files\n",
-                (const char *) tokens[markerColumn]);
-         continue;
-         }
-
-      if (marker < 0)
-         {
-         marker = CreateNewMarkerId(tokens[markerColumn]);
-         direction += '?';
-         }
-
-      double w, z;
-
-      if (!useStandardErrors)
-         {
-         long double p = tokens[pvalueColumn].AsLongDouble();
-
-         if (p <= 0 || p > 1.0)
-            {
-            if (++invalid > maxWarnings) continue;
-            printf("## WARNING: Invalid pvalue for marker %s, ignored\n", (const char *) tokens[markerColumn]);
+        if (tokens.Length() < minColumns) {
+            shortColumnCount++;
             continue;
+        }
+
+        if (!ApplyFilter(tokens)) continue;
+
+        int marker = markerLookup.Integer(tokens[markerColumn]);
+
+        if (marker < 0 && guessAlleles) {
+            if (++blindGuesses > maxWarnings) continue;
+            printf("## WARNING: Can't guess alleles for '%s', marker not seen in previous files\n",
+                   (const char *) tokens[markerColumn]);
+            continue;
+        }
+
+        if (marker < 0) {
+            marker = CreateNewMarkerId(tokens[markerColumn]);
+            direction += '?';
+        }
+
+        double w, z;
+
+        if (!useStandardErrors) {
+            long double p = tokens[pvalueColumn].AsLongDouble();
+
+            if (p <= 0 || p > 1.0) {
+                if (++invalid > maxWarnings) continue;
+                printf("## WARNING: Invalid pvalue for marker %s, ignored\n", (const char *) tokens[markerColumn]);
+                continue;
             }
 
-         z = -ninv(p * 0.5);
-         w = weightColumn >= 0 ? tokens[weightColumn].AsDouble() : weight;
+            z = -ninv(p * 0.5);
+            w = weightColumn >= 0 ? tokens[weightColumn].AsDouble() : weight;
 
-         if (!logTransform && effectColumn >= 0 && tokens[effectColumn][0] == '-')
+            if (!logTransform && effectColumn >= 0 && tokens[effectColumn][0] == '-')
+                z *= -1;
+
+            if (logTransform) {
+                double eff = tokens[effectColumn].AsDouble();
+
+                if (eff <= 0.0) {
+                    if (++invalidEffect > maxWarnings) continue;
+                    printf("## WARNING: Invalid effect %s for marker %s, ignored\n",
+                           (const char *) effectLabel, (const char *) tokens[markerColumn]);
+                    continue;
+                }
+
+                if (eff < 1.0)
+                    z *= -1;
+            }
+        } else {
+            double eff = tokens[effectColumn].AsDouble();
+            double sd = tokens[stderrColumn].AsDouble();
+
+            if (logTransform) {
+#if  defined(BSD_SOURCE) || defined(_SVID_SOURCE) || defined(_ISOC99_SOURCE) || XOPEN_SOURCE > 600
+                if (eff <= 0.0 || isnan(eff) || isinf(eff))
+#else
+                if (eff <= 0.0)
+#endif
+                {
+                    if (++invalidEffect > maxWarnings) continue;
+                    printf("## WARNING: Invalid log(effect) for marker %s, ignored\n",
+                           (const char *) tokens[markerColumn]);
+                    continue;
+                }
+
+                eff = log(eff);
+            }
+
+            if (sd <= 0) {
+                if (++invalid > maxWarnings) continue;
+                printf("## WARNING: Invalid standard error for marker %s, ignored\n",
+                       (const char *) tokens[markerColumn]);
+                continue;
+            }
+
+            z = eff;
+            w = 1.0 / (sd * sd);
+        }
+
+        double freq = 0.0;
+        if (useFrequencies)
+            freq = tokens[freqColumn].AsDouble();
+
+        if (flip)
             z *= -1;
 
-         if (logTransform)
-            {
-            double eff = tokens[effectColumn].AsDouble();
+        if (firstColumn >= 0 && secondColumn >= 0) {
+            NumbersToLetters(tokens[firstColumn]);
+            NumbersToLetters(tokens[secondColumn]);
 
-            if (eff <= 0.0)
-               {
-               if (++invalidEffect > maxWarnings) continue;
-               printf("## WARNING: Invalid effect %s for marker %s, ignored\n",
-                     (const char *) effectLabel, (const char *) tokens[markerColumn]);
-               continue;
-               }
-
-            if (eff < 1.0)
-               z *= -1;
-            }
-         }
-      else
-         {
-         double eff = tokens[effectColumn].AsDouble();
-         double sd  = tokens[stderrColumn].AsDouble();
-
-         if (logTransform)
-            {
-#if  defined(BSD_SOURCE) || defined(_SVID_SOURCE) || defined(_ISOC99_SOURCE) || XOPEN_SOURCE > 600
-            if (eff <= 0.0 || isnan(eff) || isinf(eff))
-#else
-            if (eff <= 0.0)
-#endif
-               {
-               if (++invalidEffect > maxWarnings) continue;
-               printf("## WARNING: Invalid log(effect) for marker %s, ignored\n", (const char *) tokens[markerColumn]);
-               continue;
-               }
-
-            eff = log(eff);
+            if (useStrand && tokens[strandColumn] == "-") {
+                FlipAllele(tokens[firstColumn]);
+                FlipAllele(tokens[secondColumn]);
             }
 
-         if (sd <= 0)
-            {
-            if (++invalid > maxWarnings) continue;
-            printf("## WARNING: Invalid standard error for marker %s, ignored\n", (const char *) tokens[markerColumn]);
-            continue;
-            }
+            bool flip = FlipAlleles(tokens[firstColumn], tokens[secondColumn], z, freq);
 
-         z = eff;
-         w = 1.0 / (sd * sd);
-         }
-
-      double freq = 0.0;
-      if (useFrequencies)
-         freq = tokens[freqColumn].AsDouble();
-
-      if (flip)
-         z *= -1;
-
-      if (firstColumn >= 0 && secondColumn >= 0)
-         {
-         NumbersToLetters(tokens[firstColumn]);
-         NumbersToLetters(tokens[secondColumn]);
-
-         if (useStrand && tokens[strandColumn] == "-")
-            {
-            FlipAllele(tokens[firstColumn]);
-            FlipAllele(tokens[secondColumn]);
-            }
-
-         bool flip = FlipAlleles(tokens[firstColumn], tokens[secondColumn], z, freq);
-
-         if (allele1[marker] == "")
-            allele1[marker] = tokens[firstColumn],
-            allele2[marker] = tokens[secondColumn],
-            original_flipped[marker] = flip ? 'Y' : 'N';
-         else
-            if (tokens[firstColumn] != allele1[marker] ||
-                tokens[secondColumn] != allele2[marker])
-                {
+            if (allele1[marker] == "")
+                allele1[marker] = tokens[firstColumn],
+                allele2[marker] = tokens[secondColumn],
+                original_flipped[marker] = flip ? 'Y' : 'N';
+            else if (tokens[firstColumn] != allele1[marker] ||
+                     tokens[secondColumn] != allele2[marker]) {
                 if (++badAlleles > maxWarnings) continue;
                 printf("## WARNING: Bad alleles for marker '%s', expecting '%s/%s' found '%s/%s'\n",
-                         (const char *) tokens[markerColumn],
-                         (const char *) allele1[marker],
-                         (const char *) allele2[marker],
-                         (const char *) tokens[firstColumn],
-                         (const char *) tokens[secondColumn]);
+                       (const char *) tokens[markerColumn],
+                       (const char *) allele1[marker],
+                       (const char *) allele2[marker],
+                       (const char *) tokens[firstColumn],
+                       (const char *) tokens[secondColumn]);
                 continue;
-                }
-         }
-      else if (guessAlleles)
-         {
-         tokens.Push("");
-         NumbersToLetters(tokens[firstColumn]);
-         if (!GuessSecondAllele(marker, tokens[firstColumn], tokens.Last()))
-             {
-             if (++badGuesses <= maxWarnings)
-                printf("## WARNING: Bad allele or ambiguous strand for marker '%s', expecting '%s/%s' found '%s'\n",
-                            (const char *) tokens[markerColumn],
-                            (const char *) allele1[marker],
-                            (const char *) allele2[marker],
-                            (const char *) tokens[firstColumn]);
-             continue;
-             }
-         FlipAlleles(tokens[firstColumn], tokens.Last(), z, freq);
-         }
-
-      if (direction[marker] != '?')
-         {
-         if (++duplicates > maxWarnings) continue;
-         printf("## WARNING: Marker '%s' duplicated in input, first instance used, others skipped\n",
-                (const char *) tokens[markerColumn]);
-         continue;
-         }
-
-      direction[marker] = z == 0.0 ? '0' : (z > 0.0 ? '+' : '-');
-
-      if (verbose)
-         {
-         String al1 = allele1[marker];
-         String al2 = allele2[marker];
-
-         if (original_flipped[marker] == 'Y')
-            FlipAllele(al1), FlipAllele(al2);
-
-         printf("# %s\t%s\t%s\t", (const char *) tokens[markerColumn],
-                                (const char *) al1,
-                                (const char *) al2);
-
-         if (!useStandardErrors)
-            printf("%g\t%+.3f\t%.4g\t", w, z, ndist(fabs(z), true) * 2.0);
-         else
-            printf("%.3f\t%.3f\t%.4g\t", z, w > 0.0 ? sqrt(1.0 / w) : 0.0, chidist(z * z * w, 1));
-
-         if (minMaxFrequencies || averageFrequencies)
-            printf("%.3f\t", freq);
-
-         printf("%s\n", (const char *) filenames.Last());
-         }
-
-      if (!useStandardErrors)
-         {
-         statistics[marker] += sqrt(w) * z;
-         weights[marker] += w;
-         if (genomicControl)
-            if (genomicControlFilter.Length() == 0 || genomicControlFilter[marker] == 'Y')
-               chiSquareds.Push(z * z);
-         }
-      else
-         {
-         statistics[marker] += w * z;
-         weights[marker] += w;
-         if (genomicControl)
-            if (genomicControlFilter.Length() == 0 || genomicControlFilter[marker] == 'Y')
-               chiSquareds.Push(z * z * w);
-         }
-
-      if (averageFrequencies)
-         {
-         frequencies[marker] += w * freq;
-         frequencies2[marker] += w * freq * freq;
-         }
-
-      if (minMaxFrequencies)
-         {
-         if (minFrequencies[marker] > freq || minFrequencies[marker] == _NAN_)
-            minFrequencies[marker] = freq;
-         if (maxFrequencies[marker] < freq || maxFrequencies[marker] == _NAN_)
-            maxFrequencies[marker] = freq;
-         }
-
-      for (int i = 0; i < customColumns.Length(); i++)
-         custom[i][marker] += tokens[customColumns[i]].AsDouble();
-
-      history->processedMarkers++;
-      }
-
-   if (invalid > maxWarnings)
-      printf("## WARNING: Invalid %s for %d other markers also ignored\n",
-             useStandardErrors ? "standard errors" : "p-values", invalid - maxWarnings);
-
-   if (invalidEffect > maxWarnings)
-      printf("## WARNING: Invalid log(effect) for %d other markers also ignored\n", invalidEffect - maxWarnings);
-
-   if (badGuesses > maxWarnings)
-      printf("## WARNING: Failed to guess second allele for %d other markers\n", badGuesses - maxWarnings);
-
-   if (duplicates > maxWarnings)
-      printf("## WARNING: An additional %d rows with duplicate marker names were ignored\n", duplicates - maxWarnings);
-
-   if (badAlleles > maxWarnings)
-      printf("## WARNING: Allele names don't match previous occurences at %d additional markers\n", badAlleles - maxWarnings);
-
-   if (blindGuesses > maxWarnings)
-      printf("## WARNING: An additional %d markers whose alleles couldn't be guessed were skipped\n", blindGuesses - maxWarnings);
-
-   if (wrongColumnCount)
-      {
-      if (strictColumnCounting)
-         printf("## WARNING: %d input lines were skipped because they did not include exactly %d entries\n"
-                "##          For lenient handling of trailing tokens, use the COLUMNCOUNTING LENIENT command\n",
-                wrongColumnCount, expectedColumns);
-      else
-         {
-         printf("## WARNING: %d input lines did not include exactly %d columns as in the header line\n", wrongColumnCount, expectedColumns);
-         printf("## WARNING: %d input lines included less than the %d required columns and were skipped\n", shortColumnCount, minColumns);
-         }
-      }
-
-   FilterSummary();
-
-   directions.Push(direction);
-
-   history->genomicControl = 1.0;
-   if (genomicControl)
-      {
-      if (chiSquareds.Length() == 0 && genomicControlLambda == 0.0 && genomicControlFilter.Length() == 0)
-         {
-         printf("## WARNING: Genomic control parameter cannot be calculated, no valid input\n");
-
-         statistics.Swap(backupStatistics);
-
-         if (useStandardErrors)
-            {
-            backupFrequencies2.Swap(frequencies2);
-            backupFrequencies.Swap(frequencies);
-            backupWeights.Swap(weights);
             }
-         }
-      else
-         {
-         bool warning = false;
-         double gc = genomicControlLambda;
+        } else if (guessAlleles) {
+            tokens.Push("");
+            NumbersToLetters(tokens[firstColumn]);
+            if (!GuessSecondAllele(marker, tokens[firstColumn], tokens.Last())) {
+                if (++badGuesses <= maxWarnings)
+                    printf("## WARNING: Bad allele or ambiguous strand for marker '%s', expecting '%s/%s' found '%s'\n",
+                           (const char *) tokens[markerColumn],
+                           (const char *) allele1[marker],
+                           (const char *) allele2[marker],
+                           (const char *) tokens[firstColumn]);
+                continue;
+            }
+            FlipAlleles(tokens[firstColumn], tokens.Last(), z, freq);
+        }
 
-         if (gc == 0.0)
-            if (chiSquareds.Length())
-               {
-               chiSquareds.Sort();
-               gc = chiSquareds[0.5] / 0.4549364;
-               }
+        if (direction[marker] != '?') {
+            if (++duplicates > maxWarnings) continue;
+            printf("## WARNING: Marker '%s' duplicated in input, first instance used, others skipped\n",
+                   (const char *) tokens[markerColumn]);
+            continue;
+        }
+
+        direction[marker] = z == 0.0 ? '0' : (z > 0.0 ? '+' : '-');
+
+        if (verbose) {
+            String al1 = allele1[marker];
+            String al2 = allele2[marker];
+
+            if (original_flipped[marker] == 'Y')
+                FlipAllele(al1), FlipAllele(al2);
+
+            printf("# %s\t%s\t%s\t", (const char *) tokens[markerColumn],
+                   (const char *) al1,
+                   (const char *) al2);
+
+            if (!useStandardErrors)
+                printf("%g\t%+.3f\t%.4g\t", w, z, ndist(fabs(z), true) * 2.0);
             else
-               {
-               warning = true;
-               printf("## WARNING: Genomic control parameter cannot be calculated, no null markers\n");
-               gc = 1.0;
-               }
+                printf("%.3f\t%.3f\t%.4g\t", z, w > 0.0 ? sqrt(1.0 / w) : 0.0, chidist(z * z * w, 1));
 
-         if (gc <= 1.0)
-            {
-            if (!warning)
-               printf("## Genomic control parameter is %.3f, no adjustment made\n", gc);
-            gc = 1.0;
+            if (minMaxFrequencies || averageFrequencies)
+                printf("%.3f\t", freq);
+
+            printf("%s\n", (const char *) filenames.Last());
+        }
+
+        if (studyOverlap) {
+            samples[marker] += w;
+        }
+
+        if (!useStandardErrors) {
+            statistics[marker] += sqrt(w) * z;
+            weights[marker] += w;
+            if (genomicControl)
+                if (genomicControlFilter.Length() == 0 || genomicControlFilter[marker] == 'Y')
+                    chiSquareds.Push(z * z);
+        } else {
+            statistics[marker] += w * z;
+            weights[marker] += w;
+            if (genomicControl)
+                if (genomicControlFilter.Length() == 0 || genomicControlFilter[marker] == 'Y')
+                    chiSquareds.Push(z * z * w);
+        }
+
+        if (averageFrequencies) {
+            frequencies[marker] += w * freq;
+            frequencies2[marker] += w * freq * freq;
+        }
+
+        if (minMaxFrequencies) {
+            if (minFrequencies[marker] > freq || minFrequencies[marker] == _NAN_)
+                minFrequencies[marker] = freq;
+            if (maxFrequencies[marker] < freq || maxFrequencies[marker] == _NAN_)
+                maxFrequencies[marker] = freq;
+        }
+
+        for (int i = 0; i < customColumns.Length(); i++)
+            custom[i][marker] += tokens[customColumns[i]].AsDouble();
+
+        history->processedMarkers++;
+    }
+
+    if (invalid > maxWarnings)
+        printf("## WARNING: Invalid %s for %d other markers also ignored\n",
+               useStandardErrors ? "standard errors" : "p-values", invalid - maxWarnings);
+
+    if (invalidEffect > maxWarnings)
+        printf("## WARNING: Invalid log(effect) for %d other markers also ignored\n", invalidEffect - maxWarnings);
+
+    if (badGuesses > maxWarnings)
+        printf("## WARNING: Failed to guess second allele for %d other markers\n", badGuesses - maxWarnings);
+
+    if (duplicates > maxWarnings)
+        printf("## WARNING: An additional %d rows with duplicate marker names were ignored\n",
+               duplicates - maxWarnings);
+
+    if (badAlleles > maxWarnings)
+        printf("## WARNING: Allele names don't match previous occurences at %d additional markers\n",
+               badAlleles - maxWarnings);
+
+    if (blindGuesses > maxWarnings)
+        printf("## WARNING: An additional %d markers whose alleles couldn't be guessed were skipped\n",
+               blindGuesses - maxWarnings);
+
+    if (wrongColumnCount) {
+        if (strictColumnCounting)
+            printf("## WARNING: %d input lines were skipped because they did not include exactly %d entries\n"
+                           "##          For lenient handling of trailing tokens, use the COLUMNCOUNTING LENIENT command\n",
+                   wrongColumnCount, expectedColumns);
+        else {
+            printf("## WARNING: %d input lines did not include exactly %d columns as in the header line\n",
+                   wrongColumnCount, expectedColumns);
+            printf("## WARNING: %d input lines included less than the %d required columns and were skipped\n",
+                   shortColumnCount, minColumns);
+        }
+    }
+
+    FilterSummary();
+
+    directions.Push(direction);
+
+    history->genomicControl = 1.0;
+    if (genomicControl) {
+        if (chiSquareds.Length() == 0 && genomicControlLambda == 0.0 && genomicControlFilter.Length() == 0) {
+            printf("## WARNING: Genomic control parameter cannot be calculated, no valid input\n");
+
+            statistics.Swap(backupStatistics);
+
+            if (useStandardErrors) {
+                backupFrequencies2.Swap(frequencies2);
+                backupFrequencies.Swap(frequencies);
+                backupWeights.Swap(weights);
+            } else {
+                if (studyOverlap) {
+                    backupSamples.Swap(samples);
+                    backupWeights.Swap(weights);
+                }
             }
-         else
-            printf("## Genomic control parameter is %.3f, adjusting test statistics\n", gc);
+        } else {
+            bool warning = false;
+            double gc = genomicControlLambda;
 
-         history->genomicControl = gc;
+            if (gc == 0.0)
+                if (chiSquareds.Length()) {
+                    chiSquareds.Sort();
+                    gc = chiSquareds[0.5] / 0.4549364;
+                } else {
+                    warning = true;
+                    printf("## WARNING: Genomic control parameter cannot be calculated, no null markers\n");
+                    gc = 1.0;
+                }
 
-         if (!useStandardErrors)
-            statistics *= 1.0 / sqrt(gc);
-         else
-            statistics *= 1.0 / gc;
+            if (gc <= 1.0) {
+                if (!warning)
+                    printf("## Genomic control parameter is %.3f, no adjustment made\n", gc);
+                gc = 1.0;
+            } else
+                printf("## Genomic control parameter is %.3f, adjusting test statistics\n", gc);
 
-         for (int i  = 0; i < backupStatistics.Length(); i++)
+            history->genomicControl = gc;
+
+            if (!useStandardErrors) {
+                statistics *= 1.0 / sqrt(gc);
+            } else {
+                statistics *= 1.0 / gc;
+                weights *= 1.0 / gc;
+                if (averageFrequencies) frequencies *= 1.0 / gc;
+                if (averageFrequencies) frequencies2 *= 1.0 / gc;
+            }
+        }
+    }
+
+
+    std::map<const int, double> rho;
+    std::map<const int, double>::iterator rho_it;
+
+
+    if (studyOverlap & (backupStatistics.Length() > 0)) {
+        double z1_value = 0.0, z2_value = 0.0;
+
+        for (int i = 0; i < backupStatistics.Length(); i++) {
+            if (direction[i] == '?') {
+                continue;
+            }
+            rho.insert(std::pair<const int, double>((((int) (backupSamples[i] + samples[i])) / studyOverlapStep), 0.0));
+        }
+
+        for (rho_it = rho.begin(); rho_it != rho.end(); ++rho_it) {
+            z1.Clear();
+            z2.Clear();
+            for (int i = 0; i < backupStatistics.Length(); ++i) {
+                if (direction[i] == '?') {
+                    continue;
+                }
+                if (((int) (backupSamples[i] + samples[i])) / studyOverlapStep != rho_it->first) {
+                    continue;
+                }
+                z1_value = backupStatistics[i] / sqrt(backupWeights[i]);
+                z2_value = statistics[i] / sqrt(weights[i]);
+                if ((fabs(z1_value) < zCutoff) && (fabs(z2_value) < zCutoff)) {
+                    z1.Push(z1_value);
+                    z2.Push(z2_value);
+                }
+            }
+            ScalarMinimizer s;
+            s.func = trunc_norm;
+            s.a = -1.0;
+            s.b = 1.0;
+            s.c = s.b - (s.b - s.a) / (GOLD + 1.0);
+            s.fa = s.f(s.a);
+            s.fb = s.f(s.b);
+            s.fc = s.f(s.c);
+            s.Brent();
+            rho_it->second = s.min;
+            printf("## Samples overlap for markers with %d<=WEIGHT<%d: %.10f\n", rho_it->first * studyOverlapStep,
+                   rho_it->first * studyOverlapStep + studyOverlapStep, rho_it->second);
+        }
+    }
+
+    if (studyOverlap) {
+        double n12 = 0.0;
+        for (int i = 0; i < backupStatistics.Length(); ++i) {
+            n12 = rho[((int) (samples[i] + backupSamples[i])) / studyOverlapStep] * sqrt(weights[i] * backupWeights[i]);
+            samples[i] += backupSamples[i] - n12;
+            weights[i] += backupWeights[i] + 2 * n12;
+            statistics[i] += backupStatistics[i];
+        }
+    } else if (genomicControl) {
+        for (int i = 0; i < backupStatistics.Length(); i++)
             statistics[i] += backupStatistics[i];
 
-         if (useStandardErrors)
-            {
-            weights *= 1.0 / gc;
-
-            if (averageFrequencies) frequencies *= 1.0 / gc;
-            if (averageFrequencies) frequencies2 *= 1.0 / gc;
-
+        if (useStandardErrors) {
             for (int i = 0; i < backupWeights.Length(); i++)
-               weights[i] += backupWeights[i];
+                weights[i] += backupWeights[i];
 
-            for (int i = 0; i < backupFrequencies.Length(); i++)
-               {
-               frequencies2[i] += backupFrequencies2[i];
-               frequencies[i] += backupFrequencies[i];
-               }
+            for (int i = 0; i < backupFrequencies.Length(); i++) {
+                frequencies2[i] += backupFrequencies2[i];
+                frequencies[i] += backupFrequencies[i];
             }
-         }
-      }
+        }
+    }
 
-   printf("## Processed %d markers ...\n\n", history->processedMarkers);
+//    history->genomicControl = 1.0;
+//    if (genomicControl) {
+//        if (chiSquareds.Length() == 0 && genomicControlLambda == 0.0 && genomicControlFilter.Length() == 0) {
+//            printf("## WARNING: Genomic control parameter cannot be calculated, no valid input\n");
+//
+//            statistics.Swap(backupStatistics);
+//
+//            if (useStandardErrors) {
+//                backupFrequencies2.Swap(frequencies2);
+//                backupFrequencies.Swap(frequencies);
+//                backupWeights.Swap(weights);
+//            }
+//        } else {
+//            bool warning = false;
+//            double gc = genomicControlLambda;
+//
+//            if (gc == 0.0)
+//                if (chiSquareds.Length()) {
+//                    chiSquareds.Sort();
+//                    gc = chiSquareds[0.5] / 0.4549364;
+//                } else {
+//                    warning = true;
+//                    printf("## WARNING: Genomic control parameter cannot be calculated, no null markers\n");
+//                    gc = 1.0;
+//                }
+//
+//            if (gc <= 1.0) {
+//                if (!warning)
+//                    printf("## Genomic control parameter is %.3f, no adjustment made\n", gc);
+//                gc = 1.0;
+//            } else
+//                printf("## Genomic control parameter is %.3f, adjusting test statistics\n", gc);
+//
+//            history->genomicControl = gc;
+//
+//            if (!useStandardErrors)
+//                statistics *= 1.0 / sqrt(gc);
+//            else
+//                statistics *= 1.0 / gc;
+//
+//            for (int i = 0; i < backupStatistics.Length(); i++)
+//                statistics[i] += backupStatistics[i];
+//
+//            if (useStandardErrors) {
+//                weights *= 1.0 / gc;
+//
+//                if (averageFrequencies) frequencies *= 1.0 / gc;
+//                if (averageFrequencies) frequencies2 *= 1.0 / gc;
+//
+//                for (int i = 0; i < backupWeights.Length(); i++)
+//                    weights[i] += backupWeights[i];
+//
+//                for (int i = 0; i < backupFrequencies.Length(); i++) {
+//                    frequencies2[i] += backupFrequencies2[i];
+//                    frequencies[i] += backupFrequencies[i];
+//                }
+//            }
+//        }
+//    }
 
-   ifclose(f);
-   }
+    printf("## Processed %d markers ...\n\n", history->processedMarkers);
+
+    ifclose(f);
+}
+
+
+
+
 
 bool ReProcessFile(FileSummary * history)
    {

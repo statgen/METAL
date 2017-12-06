@@ -24,6 +24,8 @@
 #include "MathStats.h"
 #include "InputFile.h"
 #include "IntArray.h"
+#include <vector>
+
 
 class FileSummary
    {
