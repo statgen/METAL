@@ -742,7 +742,7 @@ double trunc_norm(double rho) {
     for (int i = 0; i < z1.Length(); ++i) {
         sum_d += log(binormp(z1[i], z2[i], rho));
     }
-    double l = -sum_d + z1.Length() * log(binormq(-1, -1, rho) - binormq(-1, 1, rho) - binormq(1, -1, rho) + binormq(1, 1, rho));
+    double l = -sum_d + z1.Length() * log(binormq(-1.0 * zCutoff, -1.0 * zCutoff, rho) - binormq(-1.0 * zCutoff, zCutoff, rho) - binormq(zCutoff, -1.0 * zCutoff, rho) + binormq(zCutoff, zCutoff, rho));
     return l;
 }
 
@@ -1111,9 +1111,9 @@ void ProcessFile(String & filename, FileSummary * history) {
                    (const char *) al2);
 
             if (!useStandardErrors)
-                printf("%g\t%+.3f\t%.4g\t", w, z, ndist(fabs(z), true) * 2.0);
+                printf("%g\t%+.22f\t%.4g\t", w, z, ndist(fabs(z), true) * 2.0);
             else
-                printf("%.3f\t%.3f\t%.4g\t", z, w > 0.0 ? sqrt(1.0 / w) : 0.0, chidist(z * z * w, 1));
+                printf("%.3f\t%.22f\t%.4g\t", z, w > 0.0 ? sqrt(1.0 / w) : 0.0, chidist(z * z * w, 1));
 
             if (minMaxFrequencies || averageFrequencies)
                 printf("%.3f\t", freq);
@@ -1279,6 +1279,7 @@ void ProcessFile(String & filename, FileSummary * history) {
                     z2.Push(z2_value);
                 }
             }
+
             ScalarMinimizer s;
             s.func = trunc_norm;
             s.a = -1.0;
@@ -1288,8 +1289,12 @@ void ProcessFile(String & filename, FileSummary * history) {
             s.fb = s.f(s.b);
             s.fc = s.f(s.c);
             s.Brent();
-            rho_it->second = s.min;
-            printf("## Samples overlap for markers with %d<=WEIGHT<%d: %.10f\n", rho_it->first * studyOverlapStep,
+            if (s.min < 0.0) {
+                rho_it->second = 0.0;
+            } else {
+                rho_it->second = s.min;
+            }
+            printf("## Samples overlap for %d marker(s) with %d<=WEIGHT<%d: %.10f\n", z1.Length(), rho_it->first * studyOverlapStep,
                    rho_it->first * studyOverlapStep + studyOverlapStep, rho_it->second);
         }
     }
@@ -2040,11 +2045,11 @@ void RunScript(FILE * file)
                     continue;
                 }
                 studyOverlap = true;
-                printf("## Study overlap enabled\n");
+                printf("## Correction for samples overlap enabled\n");
                 continue;
             } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
                 studyOverlap = false;
-                printf("## Study overlap disabled\n");
+                printf("## Correction for samples overlap disabled\n");
                 continue;
             }
         }
