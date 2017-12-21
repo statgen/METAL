@@ -1251,7 +1251,6 @@ void ProcessFile(String & filename, FileSummary * history) {
     std::map<const int, double> rho;
     std::map<const int, double>::iterator rho_it;
 
-
     if (studyOverlap & (backupStatistics.Length() > 0)) {
         double z1_value = 0.0, z2_value = 0.0;
 
@@ -1391,212 +1390,195 @@ void ProcessFile(String & filename, FileSummary * history) {
 
 
 
-bool ReProcessFile(FileSummary * history)
-   {
-   if (history->processedMarkers == 0)
-      return true;
+bool ReProcessFile(FileSummary * history) {
+    if (history->processedMarkers == 0)
+        return true;
 
-   IFILE f = ifopen(history->filename, "rb");
+    IFILE f = ifopen(history->filename, "rb");
 
-   if (f == NULL)
-      {
-      printf("## Failed to open file '%s'\n", (const char *) history->filename);
-      return false;
-      }
+    if (f == NULL) {
+        printf("## Failed to open file '%s'\n", (const char *) history->filename);
+        return false;
+    }
 
-   printf("## Processing file '%s'\n", (const char *) history->filename);
+    printf("## Processing file '%s'\n", (const char *) history->filename);
 
-   String input;
-   StringArray tokens;
+    String input;
+    StringArray tokens;
 
-   input.ReadLine(f);
+    input.ReadLine(f);
 
-   if (input != history->header)
-      {
-      printf("## ERROR: Input file has changed since analysis started\n\n");
-      ifclose(f);
-      return false;
-      }
+    if (input != history->header) {
+        printf("## ERROR: Input file has changed since analysis started\n\n");
+        ifclose(f);
+        return false;
+    }
 
-   int markerColumn = history->markerColumn;
-   int pvalueColumn = history->pvalueColumn;
-   int effectColumn = history->effectColumn;
-   int weightColumn = history->weightColumn;
-   int firstColumn = history->firstColumn;
-   int secondColumn = history->secondColumn;
-   int stderrColumn = history->stderrColumn;
-   int freqColumn = history->freqColumn;
-   int strandColumn = history->strandColumn;
-   int expectedColumns = history->expectedColumns;
+    int markerColumn = history->markerColumn;
+    int pvalueColumn = history->pvalueColumn;
+    int effectColumn = history->effectColumn;
+    int weightColumn = history->weightColumn;
+    int firstColumn = history->firstColumn;
+    int secondColumn = history->secondColumn;
+    int stderrColumn = history->stderrColumn;
+    int freqColumn = history->freqColumn;
+    int strandColumn = history->strandColumn;
+    int expectedColumns = history->expectedColumns;
 
-   bool strictColumnCounting = history->strictColumnCounting;
-   bool useStrand = history->useStrand;
+    bool strictColumnCounting = history->strictColumnCounting;
+    bool useStrand = history->useStrand;
 
-   if (firstColumn >= 0 && secondColumn < 0)
-      {
-      printf("## ERROR: Heterogeneity analysis requires both allele labels\n\n");
-      ifclose(f);
-      return false;
-      }
+    if (firstColumn >= 0 && secondColumn < 0) {
+        printf("## ERROR: Heterogeneity analysis requires both allele labels\n\n");
+        ifclose(f);
+        return false;
+    }
 
-   bool useFrequencies = minMaxFrequencies || averageFrequencies;
+    bool useFrequencies = minMaxFrequencies || averageFrequencies;
 
-   history->filterLabel.Swap(filterLabel);
-   history->filterColumn.Swap(filterColumn);
-   history->filterCondition.Swap(filterCondition);
-   history->filterValue.Swap(filterValue);
-   history->filterAlternate.Swap(filterAlternate);
-   history->filterSets.Swap(filterSets);
-   history->filterCounts.Swap(filterCounts);
+    history->filterLabel.Swap(filterLabel);
+    history->filterColumn.Swap(filterColumn);
+    history->filterCondition.Swap(filterCondition);
+    history->filterValue.Swap(filterValue);
+    history->filterAlternate.Swap(filterAlternate);
+    history->filterSets.Swap(filterSets);
+    history->filterCounts.Swap(filterCounts);
 
-   int minColumns = history->minColumns;
-   int processedMarkers = 0;
+    int minColumns = history->minColumns;
+    int processedMarkers = 0;
 
-   String direction;
-   direction.Fill('?', allele1.Length());
+    String direction;
+    direction.Fill('?', allele1.Length());
 
-   while (!ifeof(f))
-      {
-      if (history->separators.Length() != 1)
-         tokens.ReplaceTokens(input.ReadLine(f).Trim(), history->separators);
-      else
-         tokens.ReplaceColumns(input.ReadLine(f), history->separators[0]);
+    while (!ifeof(f)) {
+        if (history->separators.Length() != 1)
+            tokens.ReplaceTokens(input.ReadLine(f).Trim(), history->separators);
+        else
+            tokens.ReplaceColumns(input.ReadLine(f), history->separators[0]);
 
-      if (input[0] == '#') continue;
+        if (input[0] == '#') continue;
 
-      if (tokens.Length() != expectedColumns)
-         if (strictColumnCounting)
+        if (tokens.Length() != expectedColumns)
+            if (strictColumnCounting)
+                continue;
+
+        if (tokens.Length() < minColumns)
             continue;
 
-      if (tokens.Length() < minColumns)
-         continue;
+        if (!ApplyFilter(tokens)) continue;
 
-      if (!ApplyFilter(tokens)) continue;
+        int marker = markerLookup.Integer(tokens[markerColumn]);
 
-      int marker = markerLookup.Integer(tokens[markerColumn]);
+        if (marker < 0)
+            break;
 
-      if (marker < 0)
-         break;
+        double w, z;
 
-      double w, z;
+        if (!useStandardErrors) {
+            long double p = tokens[pvalueColumn].AsLongDouble();
 
-      if (!useStandardErrors)
-         {
-         long double p = tokens[pvalueColumn].AsLongDouble();
+            if (p <= 0 || p > 1.0)
+                continue;
 
-         if (p <= 0 || p > 1.0)
-            continue;
+            z = -ninv(p * 0.5);
+            w = weightColumn >= 0 ? tokens[weightColumn].AsDouble() : history->weight;
 
-         z = -ninv(p * 0.5);
-         w = weightColumn >= 0 ? tokens[weightColumn].AsDouble() : history->weight;
+            if (!history->logTransform && effectColumn >= 0 && tokens[effectColumn][0] == '-')
+                z *= -1;
 
-         if (!history->logTransform && effectColumn >= 0 && tokens[effectColumn][0] == '-')
+            if (history->logTransform) {
+                double eff = tokens[effectColumn].AsDouble();
+
+                if (eff <= 0.0)
+                    continue;
+
+                if (eff < 1.0)
+                    z *= -1;
+            }
+        } else {
+            double eff = tokens[effectColumn].AsDouble();
+            double sd = tokens[stderrColumn].AsDouble();
+
+            if (history->logTransform) {
+                if (eff <= 0.0)
+                    continue;
+
+                eff = log(eff);
+            }
+
+            if (sd <= 0)
+                continue;
+
+            z = eff;
+            w = 1.0 / (sd * sd);
+        }
+
+        double freq = 0.0;
+        if (useFrequencies)
+            freq = tokens[freqColumn].AsDouble();
+
+        if (flip)
             z *= -1;
 
-         if (history->logTransform)
-            {
-            double eff = tokens[effectColumn].AsDouble();
+        if (firstColumn >= 0 && secondColumn >= 0) {
+            NumbersToLetters(tokens[firstColumn]);
+            NumbersToLetters(tokens[secondColumn]);
 
-            if (eff <= 0.0)
-               continue;
-
-            if (eff < 1.0)
-               z *= -1;
-            }
-         }
-      else
-         {
-         double eff = tokens[effectColumn].AsDouble();
-         double sd  = tokens[stderrColumn].AsDouble();
-
-         if (history->logTransform)
-            {
-            if (eff <= 0.0)
-               continue;
-
-            eff = log(eff);
+            if (useStrand && tokens[strandColumn] == "-") {
+                FlipAllele(tokens[firstColumn]);
+                FlipAllele(tokens[secondColumn]);
             }
 
-         if (sd <= 0)
+            FlipAlleles(tokens[firstColumn], tokens[secondColumn], z, freq);
+
+            if (allele1[marker] == "")
+                break;
+            else if (tokens[firstColumn] != allele1[marker] ||
+                     tokens[secondColumn] != allele2[marker])
+                continue;
+        }
+
+        if (direction[marker] != '?')
             continue;
 
-         z = eff;
-         w = 1.0 / (sd * sd);
-         }
+        direction[marker] = z == 0.0 ? '0' : (z > 0.0 ? '+' : '-');
 
-      double freq = 0.0;
-      if (useFrequencies)
-         freq = tokens[freqColumn].AsDouble();
+        if (!useStandardErrors) {
+            if (weights[marker] == 0.0) continue;
 
-      if (flip)
-         z *= -1;
+            double ez = sqrt(w) * statistics[marker] / weights[marker];
 
-      if (firstColumn >= 0 && secondColumn >= 0)
-         {
-         NumbersToLetters(tokens[firstColumn]);
-         NumbersToLetters(tokens[secondColumn]);
+            z /= sqrt(history->genomicControl);
 
-         if (useStrand && tokens[strandColumn] == "-")
-            {
-            FlipAllele(tokens[firstColumn]);
-            FlipAllele(tokens[secondColumn]);
-            }
+            hetStatistic[marker] += (z - ez) * (z - ez);
+            hetDegreesOfFreedom[marker]++;
+        } else {
+            double e = statistics[marker] / weights[marker];
 
-         FlipAlleles(tokens[firstColumn], tokens[secondColumn], z, freq);
+            hetStatistic[marker] += (z - e) * (z - e) * w / history->genomicControl;
+            hetDegreesOfFreedom[marker]++;
+        }
 
-         if (allele1[marker] == "")
-            break;
-         else
-            if (tokens[firstColumn] != allele1[marker] ||
-                tokens[secondColumn] != allele2[marker])
-                continue;
-         }
+        processedMarkers++;
+    }
 
-      if (direction[marker] != '?')
-         continue;
+    history->filterLabel.Swap(filterLabel);
+    history->filterColumn.Swap(filterColumn);
+    history->filterCondition.Swap(filterCondition);
+    history->filterValue.Swap(filterValue);
+    history->filterAlternate.Swap(filterAlternate);
+    history->filterSets.Swap(filterSets);
+    history->filterCounts.Swap(filterCounts);
 
-      direction[marker] = z == 0.0 ? '0' : (z > 0.0 ? '+' : '-');
+    ifclose(f);
 
-      if (!useStandardErrors)
-         {
-         if (weights[marker] == 0.0) continue;
+    if (processedMarkers != history->processedMarkers) {
+        printf("## ERROR: Input file has changed since analysis started\n");
+        return false;
+    }
 
-         double ez = sqrt(w) * statistics[marker] / weights[marker];
-
-         z /= sqrt(history->genomicControl);
-
-         hetStatistic[marker] += (z - ez) * (z - ez);
-         hetDegreesOfFreedom[marker]++;
-         }
-      else
-         {
-         double e = statistics[marker] / weights[marker];
-
-         hetStatistic[marker] += (z - e) * (z - e) * w / history->genomicControl;
-         hetDegreesOfFreedom[marker]++;
-         }
-
-      processedMarkers++;
-      }
-
-   history->filterLabel.Swap(filterLabel);
-   history->filterColumn.Swap(filterColumn);
-   history->filterCondition.Swap(filterCondition);
-   history->filterValue.Swap(filterValue);
-   history->filterAlternate.Swap(filterAlternate);
-   history->filterSets.Swap(filterSets);
-   history->filterCounts.Swap(filterCounts);
-
-   ifclose(f);
-
-   if (processedMarkers != history->processedMarkers)
-      {
-      printf("## ERROR: Input file has changed since analysis started\n");
-      return false;
-      }
-
-   return true;
-   }
+    return true;
+}
 
 
 void ShowHelp(bool startup)
