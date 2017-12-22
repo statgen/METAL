@@ -8,8 +8,8 @@ METAL is a tool for the meta-analysis of genome-wide association studies. More i
 
 ## Compilation
 
-Download latest stable version of METAL or clone this GitHub repository to obtain development version of METAL.
-Then execute the following commands:
+Download and unarchive latest stable version of METAL source code or clone this GitHub repository to obtain development version.
+Then execute the following commands inside the directory with METAL source code:
 
 ```
 mkdir build && cd build
