@@ -1,5 +1,7 @@
 # METAL
 
+[![Build Status](https://travis-ci.org/statgen/METAL.svg?branch=master)](https://travis-ci.org/statgen/METAL)
+
 METAL is a tool for the meta-analysis of genome-wide association studies. More information about METAL is available at https://genome.sph.umich.edu/wiki/METAL.
 
 ## Requirements
