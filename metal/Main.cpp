@@ -713,7 +713,8 @@ void Analyze(bool heterogeneity) {
                     "# Allele2     - the second allele for this marker in the first file where it occurs\n"
                     "%s"
                     "%s"
-                    "%s\n"
+                    "%s"
+                    "%s"
                     "# %s meta-analysis p-value\n"
                     "# Direction   - summary of effect direction for each study, with one '+' or '-' per study\n"
                     "%s%s",
@@ -729,9 +730,11 @@ void Analyze(bool heterogeneity) {
             "# MaxFreq     - maximum frequency for allele 1 across all studies\n",
             useStandardErrors ?
             "# Effect      - overall estimated effect size for allele1\n"
-            "# StdErr      - overall standard error for effect size estimate" :
+            "# StdErr      - overall standard error for effect size estimate\n" :
             "# Weight      - the sum of the individual study weights (typically, N) for this marker\n"
-            "# Z-score     - the combined z-statistic for this marker",
+            "# Z-score     - the combined z-statistic for this marker\n",
+            !studyOverlap ? "" :
+            "# N           - sample size corrected for overlap between studies\n",
             logPValue ? "log(P)      - log of" : "P-value     -",
             !heterogeneity ? "" :
             "# HetISq      - I^2 statistic which measures heterogeneity on scale of 0-100%\n"
