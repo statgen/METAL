@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <MathGold.h>
 #include <map>
+#include "../version/VersionInfo.h"
 
 StringIntHash markerLookup;
 
