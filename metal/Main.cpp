@@ -2120,7 +2120,7 @@ void RunScript(FILE * file)
             if (markerLookup.Entries()) {
                 printf("## ERROR: Meta-analysis in progress - before turning on/off tracking of chromosomes and positions, use CLEAR command\n");
                 continue;
-            } else if (tokens[1]){
+            } else if (tokens[1] == "ON"){
                 trackPositions = true;
                 printf("## Tracking of chromosomes and positions is enabled\n");
                 continue;
