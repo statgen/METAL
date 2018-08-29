@@ -44,6 +44,9 @@ StringArray allele1;
 StringArray allele2;
 String      original_flipped;
 
+StringArray chromosomes;
+StringArray positions;
+
 StringArray filenames;
 StringArray directions;
 FileSummary * processedFiles = NULL;
@@ -60,6 +63,8 @@ String strandLabel  = "STRAND";
 String frequencyLabel = "FREQ";
 String firstAllele  = "ALLELE1";
 String secondAllele = "ALLELE2";
+String chromosomeLabel = "CHROMOSOME";
+String positionLabel = "POSITION";
 
 String separators  = " \t";
 
@@ -71,6 +76,7 @@ bool   genomicControl = false;
 bool   strictColumnCounting = true;
 bool   verbose = false;
 bool   logPValue = false;
+bool   trackPositions = false;
 
 String genomicControlFilter;
 double genomicControlLambda = 0.0;
@@ -170,6 +176,8 @@ int CreateNewMarkerId(const String &markerName) {
     samples.Push(0);
     allele1.Push("");
     allele2.Push("");
+    chromosomes.Push("");
+    positions.Push("");
     original_flipped += '?';
 
     for (int i = 0; i < customColumns; i++)
@@ -210,6 +218,8 @@ void ClearAll() {
     samples.Dimension(0);
     allele1.Dimension(0);
     allele2.Dimension(0);
+    chromosomes.Dimension(0);
+    positions.Dimension(0);
     frequencies.Dimension(0);
     frequencies2.Dimension(0);
     minFrequencies.Dimension(0);
@@ -559,7 +569,8 @@ void Analyze(bool heterogeneity) {
         return;
     }
 
-    fprintf(f, "MarkerName\tAllele1\tAllele2\t%s%s%s\t%s%s\t%s\tDirection%s%s",
+    fprintf(f, "%sMarkerName\tAllele1\tAllele2\t%s%s%s\t%s%s\t%s\tDirection%s%s",
+            trackPositions ? "Chromosome\tPosition\t" : "",
             averageFrequencies ? "Freq1\tFreqSE\t" : "",
             minMaxFrequencies ? "MinFreq\tMaxFreq\t" : "",
             useStandardErrors ? "Effect" : "Weight",
@@ -617,6 +628,10 @@ void Analyze(bool heterogeneity) {
             direction.Clear();
             for (int j = 0; j < filenames.Length(); j++)
                 direction += marker < directions[j].Length() ? directions[j][marker] : '?';
+
+            if (trackPositions) {
+                fprintf(f, "%s\t%s\t", (const char*) chromosomes[marker], (const char*) positions[marker]);
+            }
 
             fprintf(f, "%s\t%s\t%s\t",
                     (const char *) markerLookup[i],
@@ -692,36 +707,40 @@ void Analyze(bool heterogeneity) {
 
     fprintf(f, "# This file contains a short description of the columns in the\n"
                     "# meta-analysis summary file, named '%s'\n\n"
-                    "# Marker    - this is the marker name\n"
-                    "# Allele1   - the first allele for this marker in the first file where it occurs\n"
-                    "# Allele2   - the second allele for this marker in the first file where it occurs\n"
+                    "%s"
+                    "# Marker      - this is the marker name\n"
+                    "# Allele1     - the first allele for this marker in the first file where it occurs\n"
+                    "# Allele2     - the second allele for this marker in the first file where it occurs\n"
                     "%s"
                     "%s"
                     "%s\n"
                     "# %s meta-analysis p-value\n"
-                    "# Direction - summary of effect direction for each study, with one '+' or '-' per study\n"
+                    "# Direction   - summary of effect direction for each study, with one '+' or '-' per study\n"
                     "%s%s",
             (const char *) filename,
+            !trackPositions ? "" :
+            "# Chromosome  - chromosome name\n"
+            "# Position    - chromosomal position\n" ,
             !averageFrequencies ? "" :
             "# Freq1       - weighted average of frequency for allele 1 across all studies\n"
-                    "# FreqSE      - corresponding standard error for allele frequency estimate\n",
+            "# FreqSE      - corresponding standard error for allele frequency estimate\n",
             !minMaxFrequencies ? "" :
             "# MinFreq     - minimum frequency for allele 1 across all studies\n"
-                    "# MaxFreq     - maximum frequency for allele 1 across all studies\n",
+            "# MaxFreq     - maximum frequency for allele 1 across all studies\n",
             useStandardErrors ?
-            "# Effect    - overall estimated effect size for allele1\n"
-                    "# StdErr    - overall standard error for effect size estimate" :
-            "# Weight    - the sum of the individual study weights (typically, N) for this marker\n"
-                    "# Z-score   - the combined z-statistic for this marker",
-            logPValue ? "log(P)    - log of" : "P-value   -",
+            "# Effect      - overall estimated effect size for allele1\n"
+            "# StdErr      - overall standard error for effect size estimate" :
+            "# Weight      - the sum of the individual study weights (typically, N) for this marker\n"
+            "# Z-score     - the combined z-statistic for this marker",
+            logPValue ? "log(P)      - log of" : "P-value     -",
             !heterogeneity ? "" :
-            "# HetISq    - I^2 statistic which measures heterogeneity on scale of 0-100%\n"
-                    "# HetChiSq  - chi-squared statistic in simple test of heterogeneity\n"
-                    "# df        - degrees of freedom for heterogeneity statistic\n",
+            "# HetISq      - I^2 statistic which measures heterogeneity on scale of 0-100%\n"
+            "# HetChiSq    - chi-squared statistic in simple test of heterogeneity\n"
+            "# df          - degrees of freedom for heterogeneity statistic\n",
             !heterogeneity ? "" :
             logPValue ?
-            "# logHetP   - log of p-value for heterogeneity statistic\n" :
-            "# HetPVal   - P-value for heterogeneity statistic\n");
+            "# logHetP     - log of p-value for heterogeneity statistic\n" :
+            "# HetPVal     - P-value for heterogeneity statistic\n");
 
     for (int i = 0; i < customVariables.Length(); i++)
         fprintf(f, "# %-9s - custom variable %d\n", (const char *) customVariables[i], i + 1);
@@ -792,38 +811,37 @@ void ProcessFile(String & filename, FileSummary * history) {
         effectColumn = history->effectColumn = tokens.SlowFind(effectLabel.Mid(4, effectLabel.Length() - 2).Trim());
     }
 
-    if (effectColumn < 0)
-        if (!useStandardErrors)
-            printf("## WARNING: No '%s' column found -- assuming all effects are positive!\n",
-                   (const char *) effectLabel);
-        else {
+    if (effectColumn < 0) {
+        if (!useStandardErrors) {
+            printf("## WARNING: No '%s' column found -- assuming all effects are positive!\n", (const char *) effectLabel);
+        } else {
             printf("## ERROR: No '%s' column found\n\n", (const char *) effectLabel);
             ifclose(f);
             return;
         }
+    }
 
     int weightColumn = history->weightColumn = tokens.SlowFind(weightLabel);
-    if (weightColumn < 0 && !useStandardErrors)
+    if (weightColumn < 0 && !useStandardErrors) {
         printf("## WARNING: No '%s' column found -- using DEFAULTWEIGHT = %g\n", (const char *) weightLabel, weight);
+    }
 
     int firstColumn = history->firstColumn = tokens.SlowFind(firstAllele);
     int secondColumn = history->secondColumn = tokens.SlowFind(secondAllele);
     bool guessAlleles = false;
 
     if (firstColumn >= 0 && secondColumn < 0) {
-        printf("## WARNING: Column '%s' not found, will try to guess second allele\n",
-               (const char *) secondAllele);
+        printf("## WARNING: Column '%s' not found, will try to guess second allele\n", (const char *) secondAllele);
         guessAlleles = true;
     }
 
-    if (firstColumn < 0)
-        printf("## WARNING: Column '%s', '%s' or both not found -- assuming all effects refer to same allele\n",
-               (const char *) firstAllele, (const char *) secondAllele, firstColumn = 0);
+    if (firstColumn < 0) {
+        printf("## WARNING: Column '%s', '%s' or both not found -- assuming all effects refer to same allele\n", (const char *) firstAllele, (const char *) secondAllele, firstColumn = 0);
+    }
 
     int stderrColumn = history->stderrColumn = tokens.SlowFind(stderrLabel);
     if (stderrColumn < 0 && useStandardErrors) {
-        printf("## ERROR: Analysis based on standard errors requested but no '%s' column found\n\n",
-               (const char *) stderrLabel);
+        printf("## ERROR: Analysis based on standard errors requested but no '%s' column found\n\n", (const char *) stderrLabel);
         ifclose(f);
         return;
     }
@@ -831,8 +849,7 @@ void ProcessFile(String & filename, FileSummary * history) {
     bool useFrequencies = minMaxFrequencies || averageFrequencies;
     int freqColumn = history->freqColumn = tokens.SlowFind(frequencyLabel);
     if (freqColumn < 0 && useFrequencies) {
-        printf("## ERROR: Averaging of allele frequencies requested, but no '%s' column found\n\n",
-               (const char *) frequencyLabel);
+        printf("## ERROR: Averaging of allele frequencies requested, but no '%s' column found\n\n", (const char *) frequencyLabel);
         ifclose(f);
         return;
     }
@@ -840,6 +857,20 @@ void ProcessFile(String & filename, FileSummary * history) {
     int strandColumn = history->strandColumn = tokens.SlowFind(strandLabel);
     if (strandColumn < 0 && useStrand) {
         printf("## ERROR: Strand column labeleled '%s' not found\n\n", (const char *) strandLabel);
+        ifclose(f);
+        return;
+    }
+
+    int chromosomeColumn = history->chromosomeColumn = tokens.SlowFind(chromosomeLabel);
+    if (chromosomeColumn < 0 && trackPositions) {
+        printf("## ERROR: Chromosome column labeled '%s' not found\n\n", (const char *) strandLabel);
+        ifclose(f);
+        return;
+    }
+
+    int positionColumn = history->positionColumn = tokens.SlowFind(positionLabel);
+    if (positionColumn < 0 && trackPositions) {
+        printf("## ERROR: Position column labeled '%s' not found\n\n", (const char *) positionLabel);
         ifclose(f);
         return;
     }
@@ -862,6 +893,8 @@ void ProcessFile(String & filename, FileSummary * history) {
     if (stderrColumn >= minColumns && useStandardErrors) minColumns = stderrColumn + 1;
     if (strandColumn >= minColumns && useStrand) minColumns = strandColumn + 1;
     if (freqColumn >= minColumns && useFrequencies) minColumns = freqColumn + 1;
+    if (chromosomeColumn >= minColumns && trackPositions) minColumns = chromosomeColumn + 1;
+    if (positionColumn >= minColumns && trackPositions) minColumns = positionColumn + 1;
     if (filterColumn.Max() >= minColumns) minColumns = filterColumn.Max() + 1;
 
     IntArray customColumns(customLabels.Length());
@@ -925,6 +958,8 @@ void ProcessFile(String & filename, FileSummary * history) {
     int blindGuesses = 0;
     int wrongColumnCount = 0;
     int shortColumnCount = 0;
+    int badChromosome = 0;
+    int badPosition = 0;
 
     history->weight = weight;
 
@@ -970,9 +1005,9 @@ void ProcessFile(String & filename, FileSummary * history) {
         int marker = markerLookup.Integer(tokens[markerColumn]);
 
         if (marker < 0 && guessAlleles) {
-            if (++blindGuesses > maxWarnings) continue;
-            printf("## WARNING: Can't guess alleles for '%s', marker not seen in previous files\n",
-                   (const char *) tokens[markerColumn]);
+            if (++blindGuesses > maxWarnings)
+                continue;
+            printf("## WARNING: Can't guess alleles for '%s', marker not seen in previous files\n", (const char *) tokens[markerColumn]);
             continue;
         }
 
@@ -1092,9 +1127,29 @@ void ProcessFile(String & filename, FileSummary * history) {
 
         if (direction[marker] != '?') {
             if (++duplicates > maxWarnings) continue;
-            printf("## WARNING: Marker '%s' duplicated in input, first instance used, others skipped\n",
-                   (const char *) tokens[markerColumn]);
+            printf("## WARNING: Marker '%s' duplicated in input, first instance used, others skipped\n", (const char *) tokens[markerColumn]);
             continue;
+        }
+
+        if (trackPositions) {
+            if (chromosomes[marker] == "") {
+                chromosomes[marker] = tokens[chromosomeColumn];
+            } else if (tokens[chromosomeColumn] != chromosomes[marker]) {
+                if (++badChromosome > maxWarnings) {
+                    continue;
+                }
+                printf("## WARNING: Bad chromosome for marker '%s', expecting '%s' found '%s'\n", (const char *) tokens[markerColumn], (const char *) chromosomes[marker], (const char *) tokens[chromosomeColumn]);
+                continue;
+            }
+            if (positions[marker] == "") {
+                positions[marker] = tokens[positionColumn];
+            } else if (tokens[positionColumn] != positions[marker]) {
+                if (++badPosition > maxWarnings) {
+                    continue;
+                }
+                printf("## WARNING: Bad position for marker '%s', expecting '%s' found '%s'\n", (const char *) tokens[markerColumn], (const char *) positions[marker], (const char *) tokens[positionColumn]);
+                continue;
+            }
         }
 
         direction[marker] = z == 0.0 ? '0' : (z > 0.0 ? '+' : '-');
@@ -1168,16 +1223,13 @@ void ProcessFile(String & filename, FileSummary * history) {
         printf("## WARNING: Failed to guess second allele for %d other markers\n", badGuesses - maxWarnings);
 
     if (duplicates > maxWarnings)
-        printf("## WARNING: An additional %d rows with duplicate marker names were ignored\n",
-               duplicates - maxWarnings);
+        printf("## WARNING: An additional %d rows with duplicate marker names were ignored\n", duplicates - maxWarnings);
 
     if (badAlleles > maxWarnings)
-        printf("## WARNING: Allele names don't match previous occurences at %d additional markers\n",
-               badAlleles - maxWarnings);
+        printf("## WARNING: Allele names don't match previous occurences at %d additional markers\n", badAlleles - maxWarnings);
 
     if (blindGuesses > maxWarnings)
-        printf("## WARNING: An additional %d markers whose alleles couldn't be guessed were skipped\n",
-               blindGuesses - maxWarnings);
+        printf("## WARNING: An additional %d markers whose alleles couldn't be guessed were skipped\n", blindGuesses - maxWarnings);
 
     if (wrongColumnCount) {
         if (strictColumnCounting)
@@ -1185,10 +1237,17 @@ void ProcessFile(String & filename, FileSummary * history) {
                            "##          For lenient handling of trailing tokens, use the COLUMNCOUNTING LENIENT command\n",
                    wrongColumnCount, expectedColumns);
         else {
-            printf("## WARNING: %d input lines did not include exactly %d columns as in the header line\n",
-                   wrongColumnCount, expectedColumns);
-            printf("## WARNING: %d input lines included less than the %d required columns and were skipped\n",
-                   shortColumnCount, minColumns);
+            printf("## WARNING: %d input lines did not include exactly %d columns as in the header line\n", wrongColumnCount, expectedColumns);
+            printf("## WARNING: %d input lines included less than the %d required columns and were skipped\n", shortColumnCount, minColumns);
+        }
+    }
+
+    if (trackPositions) {
+        if (badChromosome > maxWarnings) {
+            printf("## WARNING: An additional %d markers whose chromosomes didn't match\n", badChromosome - maxWarnings);
+        }
+        if (badPosition > maxWarnings) {
+            printf("## WARNING: An additional %d markers whose positions didn't match\n", badPosition - maxWarnings);
         }
     }
 
@@ -1246,7 +1305,6 @@ void ProcessFile(String & filename, FileSummary * history) {
             }
         }
     }
-
 
     std::map<const int, double> rho;
     std::map<const int, double>::iterator rho_it;
@@ -1629,6 +1687,11 @@ void ShowHelp(bool startup)
                    "#   CUSTOMVARIABLE   [VARNAME]\n"
                    "#   LABEL            [VARNAME] AS [HEADER]\n"
                    "#\n"
+                   "# Options to enable tracking of chromosomes and positions ...\n"
+                   "#   TRACKPOSITIONS   [ON|OFF]                    (%s = %s\n"
+                   "#   CHROMOSOMELABEL  [LABEL]                     (%s = '%s')\n"
+                   "#   POSITIONLABEL    [LABEL]                     (%s = '%s')\n"
+                   "#\n"
                    "# Options to enable explicit strand information ...\n"
                    "#   USESTRAND        [ON|OFF]                    (%s = %s)\n"
                    "#   STRANDLABEL      [LABEL]                     (%s = '%s')\n"
@@ -1665,6 +1728,9 @@ void ShowHelp(bool startup)
            setting, averageFrequencies ? "ON" : "OFF",
            setting, minMaxFrequencies ? "ON" : "OFF",
            setting, (const char *) frequencyLabel,
+           setting, trackPositions ? "ON" : "OFF",
+           setting, (const char *) chromosomeLabel,
+           setting, (const char *) positionLabel,
            setting, useStrand ? "ON" : "OFF",
            setting, (const char *) strandLabel,
            setting, (const char *) gc,
@@ -1693,9 +1759,7 @@ void RunScript(FILE * file)
 
         if (input[0] == '#') continue;
 
-        if ((tokens[0].MatchesBeginningOf("ANALYZE") == 0 ||
-             tokens[0].MatchesBeginningOf("ANALYSE") == 0) &&
-            tokens[0].Length() > 1) {
+        if ((tokens[0].MatchesBeginningOf("ANALYZE") == 0 || tokens[0].MatchesBeginningOf("ANALYSE") == 0) && tokens[0].Length() > 1) {
             Analyze(tokens.Length() > 1 && tokens[1].MatchesBeginningOf("HETEROGENEITY") == 0);
             continue;
         }
@@ -1967,6 +2031,18 @@ void RunScript(FILE * file)
             continue;
         }
 
+        if (tokens[0].MatchesBeginningOf("CHROMOSOMELABEL") == 0 && tokens[0].Length() > 2) {
+            chromosomeLabel = tokens[1];
+            printf("## Set chromosome header to %s ...\n", (const char*) chromosomeLabel);
+            continue;
+        }
+
+        if (tokens[0].MatchesBeginningOf("POSITIONLABEL") == 0 && tokens[0].Length() > 2) {
+            positionLabel = tokens[1];
+            printf("## Set position header to %s ...\n", (const char*) positionLabel);
+            continue;
+        }
+
         if (tokens[0].MatchesBeginningOf("SCHEME") == 0 &&
             tokens[0].Length() > 1)
             if (markerLookup.Entries()) {
@@ -2032,6 +2108,21 @@ void RunScript(FILE * file)
             } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
                 studyOverlap = false;
                 printf("## Correction for samples overlap disabled\n");
+                continue;
+            }
+        }
+
+        if (tokens[0].MatchesBeginningOf("TRACKPOSITIONS") == 0) {
+            if (markerLookup.Entries()) {
+                printf("## ERROR: Meta-analysis in progress - before turning on/off tracking of chromosomes and positions, use CLEAR command\n");
+                continue;
+            } else if (tokens[1]){
+                trackPositions = true;
+                printf("## Tracking of chromosomes and positions is enabled\n");
+                continue;
+            } else if (tokens[1].MatchesBeginningOf("OFF") == 0 && tokens[1].Length() > 1) {
+                trackPositions = false;
+                printf("## Tracking of chromosomes and positions is disabled\n");
                 continue;
             }
         }

@@ -27,50 +27,55 @@
 #include <vector>
 
 
-class FileSummary
-   {
-   public:
-      FileSummary(FileSummary * pointer = NULL)
-         { next = pointer; }
+class FileSummary {
+public:
+    FileSummary(FileSummary * pointer = NULL) {
+        next = pointer;
+    }
 
-      ~FileSummary()
-         { if (next != NULL) delete next; }
+    virtual ~FileSummary() {
+        if (next != NULL) {
+            delete next;
+        }
+    }
 
-      String filename;
-      String header;
-      String separators;
+    String filename;
+    String header;
+    String separators;
 
-      double weight;
-      double genomicControl;
-      bool   useStrand;
+    double weight;
+    double genomicControl;
+    bool   useStrand;
 
-      int markerColumn;
-      int weightColumn;
-      int pvalueColumn;
-      int effectColumn;
-      int firstColumn;
-      int secondColumn;
-      int stderrColumn;
-      int freqColumn;
-      int strandColumn;
-      int minColumns;
-      int expectedColumns;
+    int markerColumn;
+    int weightColumn;
+    int pvalueColumn;
+    int effectColumn;
+    int firstColumn;
+    int secondColumn;
+    int stderrColumn;
+    int freqColumn;
+    int strandColumn;
+    int chromosomeColumn;
+    int positionColumn;
+    int minColumns;
+    int expectedColumns;
 
-      bool strictColumnCounting;
-      bool logTransform;
+    bool strictColumnCounting;
+    bool logTransform;
 
-      StringArray filterLabel;
-      IntArray    filterColumn;
-      IntArray    filterCondition;
-      Vector      filterValue;
-      StringArray filterAlternate;
-      StringHash  filterSets;
-      IntArray    filterCounts;
+    StringArray filterLabel;
+    IntArray    filterColumn;
+    IntArray    filterCondition;
+    Vector      filterValue;
+    StringArray filterAlternate;
+    StringHash  filterSets;
+    IntArray    filterCounts;
 
-      int processedMarkers;
+    int processedMarkers;
 
-      FileSummary * next;
-   };
+    FileSummary * next;
+};
 
 // Crash and Control-C handlers
 void UserBreak(int);
