@@ -15,7 +15,7 @@ Then execute the following commands inside the directory with METAL source code:
 
 ```
 mkdir build && cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 make test
 make install
