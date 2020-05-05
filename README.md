@@ -25,6 +25,9 @@ The compiled `metal` executable will be installed into `build/bin` directory.
 
 ## New features
 
+- 2020-05-05
+  - Implemented new options `EFFECT_PRINT_PRECISION` and `STDERR_PRINT_PRECISION` to control print precision of `Effect` and `StdErr` output columns, correspondingly. For example, setting `EFFECT_PRINT_PRECISION 12` will force METAL to print 12 digits after the decimal point in the `Effect` column. The default is to print 4 digits after the decimal point for both `Effect` and `StdErr`. Increasing precision is useful when you plan to use `Effect` and `StdErr` values computed by METAL in other downstream analyses.
+
 - 2018-08-28
   - Implemented new option `TRACKPOSITIONS`. If enabled, METAL checks if chromosome and position of a variant match across studies. The `Chromosome` and `Position` fields are propagated to the meta-analysis result file (useful when generating Manhattan or LocusZoom plots).
 
