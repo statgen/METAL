@@ -78,6 +78,8 @@ bool   strictColumnCounting = true;
 bool   verbose = false;
 bool   logPValue = false;
 bool   trackPositions = false;
+int    effectPrintPrecision = 4;
+int    stderrPrintPrecision = 4;
 
 String genomicControlFilter;
 double genomicControlLambda = 0.0;
@@ -646,9 +648,9 @@ void Analyze(bool heterogeneity) {
                 fprintf(f, "%.4f\t%.4f\t", minFrequency, maxFrequency);
 
             fprintf(f, "%.*f\t%.*f\t",
-                    useStandardErrors ? 4 : 2,
+                    useStandardErrors ? effectPrintPrecision : 2,
                     useStandardErrors ? statistics[marker] / weights[marker] : weights[marker],
-                    useStandardErrors ? 4 : 3,
+                    useStandardErrors ? stderrPrintPrecision : 3,
                     useStandardErrors ? sqrt(1.0 / weights[marker]) : statistic);
 
             if (studyOverlap) {
@@ -1708,12 +1710,14 @@ void ShowHelp(bool startup)
                    "#   ZCUTOFF          [NUMBER]                    (%s = %.1f)\n"
                    "#\n"
                    "# Options for general analysis control ...\n"
-                   "#   PROCESSFILE      [FILENAME]\n"
-                   "#   OUTFILE          [PREFIX SUFFIX]             (default = 'METAANALYSIS','.TBL')\n"
-                   "#   MAXWARNINGS      [NUMBER]                    (%s = %d)\n"
-                   "#   VERBOSE          [ON|OFF]                    (%s = '%s')\n"
-                   "#   LOGPVALUE        [ON|OFF]                    (%s = '%s')\n"
-                   "#   ANALYZE          [HETEROGENEITY]\n"
+                   "#   PROCESSFILE            [FILENAME]\n"
+                   "#   OUTFILE                [PREFIX SUFFIX]       (default = 'METAANALYSIS','.TBL')\n"
+                   "#   MAXWARNINGS            [NUMBER]              (%s = %d)\n"
+                   "#   VERBOSE                [ON|OFF]              (%s = '%s')\n"
+                   "#   LOGPVALUE              [ON|OFF]              (%s = '%s')\n"
+                   "#   EFFECT_PRINT_PRECISION [NUMBER]              (%s = '%d')\n"
+                   "#   STDERR_PRINT_PRECISION [NUMBER]              (%s = '%d')\n"
+                   "#   ANALYZE                [HETEROGENEITY]\n"
                    "#   CLEAR\n\n"
                    "# Options for general run control ...\n"
                    "#   SOURCE           [SCRIPTFILE]\n"
@@ -1742,7 +1746,9 @@ void ShowHelp(bool startup)
            setting, zCutoff,
            setting, maxWarnings,
            setting, verbose ? "ON" : "OFF",
-           setting, logPValue ? "ON" : "OFF");
+           setting, logPValue ? "ON" : "OFF",
+           setting, effectPrintPrecision,
+           setting, stderrPrintPrecision);
 }
 
 void RunScript(FILE * file)
@@ -2129,6 +2135,18 @@ void RunScript(FILE * file)
                 printf("## Tracking of chromosomes and positions is disabled\n");
                 continue;
             }
+        }
+
+        if ((tokens[0].MatchesBeginningOf("EFFECT_PRINT_PRECISION") == 0) && (tokens.Length() > 1)) {
+            effectPrintPrecision = tokens[1].AsInteger();
+            printf("## Set print pecision for Effect to %d ...\n", effectPrintPrecision);
+            continue;
+        }
+
+        if ((tokens[0].MatchesBeginningOf("STDERR_PRINT_PRECISION") == 0) && (tokens.Length() > 1)) {
+            stderrPrintPrecision = tokens[1].AsInteger();
+            printf("## Set print pecision for StdErr to %d ...\n", stderrPrintPrecision);
+            continue;
         }
 
         if (tokens[0].MatchesBeginningOf("ZCUTOFF") == 0) {
