@@ -1363,11 +1363,11 @@ void ProcessFile(String & filename, FileSummary * history) {
     }
 
     if (studyOverlap) {
-        double n12 = 0.0;
+        double rho12 = 0.0;
         for (int i = 0; i < backupStatistics.Length(); ++i) {
-            n12 = rho[((int) (samples[i] + backupSamples[i])) / studyOverlapStep] * sqrt(weights[i] * backupWeights[i]);
-            samples[i] += backupSamples[i] - n12;
-            weights[i] += backupWeights[i] + 2 * n12;
+            rho12 = rho[((int) (samples[i] + backupSamples[i])) / studyOverlapStep];
+            samples[i] += backupSamples[i] - rho12 * sqrt(samples[i] * backupSamples[i]);
+            weights[i] += backupWeights[i] + 2 * rho12 * sqrt(weights[i] * backupWeights[i]);
             statistics[i] += backupStatistics[i];
         }
     } else if (genomicControl) {
