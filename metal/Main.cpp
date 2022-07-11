@@ -765,7 +765,7 @@ bool flip = false;
 double trunc_norm(double rho) {
     double sum_d = 0.0;
     for (int i = 0; i < z1.Length(); ++i) {
-        sum_d += log(binormp(z1[i], z2[i], rho));
+        sum_d += logbinormp(z1[i], z2[i], rho);
     }
     double l = -sum_d + z1.Length() * log(binormq(-1.0 * zCutoff, -1.0 * zCutoff, rho) - binormq(-1.0 * zCutoff, zCutoff, rho) - binormq(zCutoff, -1.0 * zCutoff, rho) + binormq(zCutoff, zCutoff, rho));
     return l;
@@ -1345,8 +1345,8 @@ void ProcessFile(String & filename, FileSummary * history) {
 
             ScalarMinimizer s;
             s.func = trunc_norm;
-            s.a = -1.0;
-            s.b = 1.0;
+            s.a = -0.999999;
+            s.b = 0.999999;
             s.c = s.b - (s.b - s.a) / (GOLD + 1.0);
             s.fa = s.f(s.a);
             s.fb = s.f(s.b);
