@@ -600,6 +600,18 @@ double normp(double z) {
     return p;
 }
 
+double logbinormp(double x, double y, double rho) {
+  static const double LOGPI_MINUS_LOG2 = log(M_PI) - log(2);
+
+  if (fabs(rho) == 1.0) { // degenerate case
+    return NAN;
+  }
+
+  double c = 1.0 - rho * rho;
+  double lp = (1 / (2.0 * c)) * (2*rho*x*y - x*x - y*y) - 0.5*log(c) - LOGPI_MINUS_LOG2;
+  return lp;
+}
+
 // bivariate normal probability density function
 double binormp(double x, double y, double rho) {
     if (fabs(rho) == 1.0) { // degenerate case
